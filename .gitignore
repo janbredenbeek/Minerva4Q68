@@ -1,0 +1,36 @@
+# Windows image file caches
+Thumbs.db
+ehthumbs.db
+
+# Folder config file
+Desktop.ini
+
+# Recycle Bin used on file shares
+$RECYCLE.BIN/
+
+# Windows Installer files
+*.cab
+*.msi
+*.msm
+*.msp
+
+# Windows shortcuts
+*.lnk
+
+# Backup edited files
+*~
+
+# Notepad++ session files
+*.npp
+
+# UQLX directories
+.-UQLX-
+
+# _list, _rel etc
+*_list
+*_rel
+*_map
+*_bin
+*_exe
+*_debug
+
