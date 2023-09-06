@@ -43,9 +43,9 @@
 ;   Set symbol q68_keyc to 1 for US, 44 for UK and 49 for DE
 
         xref    disp_mode,scr_base,scr_llen,scr_xlim,scr_ylim
-        xref    free_fmem,alfm,rom_end
+        xref    free_fmem,alfm,q68scr_init,rom_end
 
-version	setstr	1.5
+version	setstr	1.6
 
 DEBUG	equ	0		; set to 1 to display variables and result code
 
@@ -95,9 +95,10 @@ romh:
 	dc.w	procs-romh	; no procs to declare
 	dc.w	rom_init-romh
 	string$	{'Q68 extension ROM v[version]',10}
-         ds.w     0
+        ds.w     0
 
 rom_init bsr.s    q68kbd_init       ; do our own initialisation
+         jsr      q68scr_init       ; initialise screen driver
          move.l   a3,-(sp)          ; save ROM pointer
          lea      rom_end(pc),a3    ; end of our code
          cmpi.l   #$4afb0001,(a3)   ; is there another extension ROM after us?
