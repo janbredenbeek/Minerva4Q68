@@ -7,6 +7,8 @@
         include 'm_inc_sd'
         include 'm_inc_sv'
         include 'm_inc_sx'
+        include 'm_mincf'
+        include 'm_inc_q68'
 
         section sd_curw
 
@@ -17,12 +19,12 @@ sd_curs
         sf      -(sp)           flag -> 0
         tst.b   sd_curf(a0)     check if visible
         bgt.s   toggle
-        bra.s   exit_set
+        bra     exit_set
 
 sd_cure
         st      -(sp)           flag -> -1
         tst.b   sd_curf(a0)     check if already visible
-        bgt.s   exit_ok
+        bgt     exit_ok
         jsr     sd_donl(pc)     issue newline if pending
         bra.s   toggle
 
@@ -35,7 +37,7 @@ sd_cure
 sd_sched
         lea     sv_fstat(a6),a0
         sub.w   d3,(a0)         decrement count
-        bcc.s   rts0            if it's not gone nasty, leave it
+        bcc     rts0            if it's not gone nasty, leave it
         move.l  sv_chtop(a6),a1 this is where the sysvars extension lives
         moveq   #0,d4
         move.b  sx_fstat(a1),d4
@@ -56,8 +58,8 @@ toggle
         jsr     sd_chchk(pc)    check if there is room for a character
         bne.s   exit
 
-regon   reg     d1-d3/a1
-regoff  reg     d0-d3/a1        (d0 just to discard space for colour masks)
+regon   reg     d1-d3/a1-a2
+regoff  reg     d0-d3/a1-a2     (d0 just to discard space for colour masks)
         movem.l regon,-(sp)
         move.l  sv_chtop(a6),a1 get sysvars extension
         move.b  sx_fstat(a1),d1
@@ -76,7 +78,12 @@ regoff  reg     d0-d3/a1        (d0 just to discard space for colour masks)
 curset
         move.w  d0,d1           split into two registers
         swap    d0
-        jsr     cs_over(pc)
+        btst    #sx..m33,sx_dmod(a2) ; a2 has been set by cs_plain
+        lea     cs_over(pc),a2
+        beq.s   curprint
+        move.l  cs.over16,a2
+curprint
+        jsr     (a2)
         movem.l (sp)+,regoff
         neg.b   (sp)
 

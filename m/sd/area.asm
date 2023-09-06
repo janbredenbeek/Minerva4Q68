@@ -8,6 +8,25 @@
         include 'm_inc_mc'
         include 'm_inc_sd'
         include 'm_inc_sv'
+        include 'm_inc_sx'
+        include 'm_mincf'
+        include 'm_inc_q68'
+
+* Macro for calling cs_* routines, either QL mode or 16-bit (via RAM vectors)
+
+do_cs   macro   a,b
+        GENIF   Q68_M33 = 0
+        lea     cs_[a](pc),[b]
+        ENDGEN
+        GENIF   Q68_M33 <> 0
+        move.l  sv_chtop(a6),[b]
+        btst    #sx..m33,sx_dmod([b])
+        lea     cs_[a](pc),[b]
+        beq.s   docs[.l]
+        move.l  cs.[a]16,[b]
+docs[.l] equ    *
+        ENDGEN
+        endm
 
         section sd_area
 
@@ -22,25 +41,29 @@ regoff  reg     d4-d7/a0-a1
 
 sd_recol
         moveq   #0,d0           recolour whole window only
-        lea     cs_recol(pc),a2 set cs entry point for recolour
+;        lea     cs_recol(pc),a2 set cs entry point for recolour
+        do_cs   recol,a2
         bra.s   go_coset        a1 has recolour table already
 
 sd_clear
         jsr     sd_home(pc)     reset cursor for full clear, d0.l = 0 on return
 sd_clrxx
         assert  0,sd.clrtp&7-1,sd.clrbt&7-2,sd.clrln&7-3,sd.clrrt&7-4
-        lea     cs_fill(pc),a2  set cs entry point for area fill
+;        lea     cs_fill(pc),a2  set cs entry point for area fill
+        do_cs   fill,a2
         bra.s   go_area
 
 sd_scrol
         assert  0,sd.scrol&7,sd.scrtp&7-1,sd.scrbt&7-2
-        lea     cs_scrol(pc),a2 set cs entry point for scroll
+;        lea     cs_scrol(pc),a2 set cs entry point for scroll
+        do_cs   scrol,a2
         bra.s   go_area
 
 sd_pan
         assert  3,sd.pan&7,sd.panln&7-3,sd.panrt&7-4
         subq.b  #3,d0
-        lea     cs_pan(pc),a2   set cs entry point for pan
+;        lea     cs_pan(pc),a2   set cs entry point for pan
+        do_cs   pan,a2
         btst    #mc..m256,sv_mcsta(a6) is it low res mode
         beq.s   go_area         pan even distances only
         bclr    #0,d1           pan even distances only

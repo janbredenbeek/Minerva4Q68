@@ -21,19 +21,20 @@
 
 sd_fresh
         move.l  a5,a1
-        move.w  #ra_ssize/4-1,d0 ... long words
+        move.l  #ra_ssize/4,d0 ... long words
         
         GENIF   Q68_HIRES = 1
         
         move.l  sv_chtop(a6),a4
         btst    #sx.q68m4,sx_dspm(a4)
         beq.s   cls
-        move.w  #1024*768/16-1,d0 ; 1024x768px at 1/4 byte/px = 1/16 long word
+        move.l  #1024*768*2/4,d0 ; at most 1024x768px at 2 byte/px = 393216 long word
         
         ENDGEN
 cls
         clr.l   (a1)+
-        dbra    d0,cls
+        subq.l  #1,d0
+        bhi     cls
 
 * Now go through all windows open, resetting and clearing them
 
@@ -48,19 +49,32 @@ chn_loop
         bne     next_chn        ... no
 
         GENIF   Q68_HIRES = 1
-        
-        btst    #sx.q68m4,sx_dspm-sx_con(a3) ; Q68 1024x768 mode?
-        beq.s   chn_tst               ; no
-        tst.l   sd_scrb(a0)           ; avoid qptr dummy window
+
+; check if window will fit in new screen
+
+        move.w  sd_xmin(a0),d0
+        add.w   sd_xsize(a0),d0
+        cmp.w   sx_xlim-sx_con(a3),d0   ; does new width fit?
+        bls.s   chn_chky                ; yes
+        move.w  sx_xlim-sx_con(a3),sd_xsize(a0) ; else reset to screen width
+        clr.w   sd_xmin(a0)             ; and set X origin to 0
+chn_chky
+        move.w  sd_ymin(a0),d0
+        add.w   sd_ysize(a0),d0
+        cmp.w   sx_ylim-sx_con(a3),d0   ; same with window height
+        bls.s   chn_rset
+        move.w  sx_ylim-sx_con(a3),sd_ysize(a0)
+        clr.w   sd_ymin(a0)
+chn_rset
+        move.w  sx_llen-sx_con(a3),sd_linel(a0) ; set new line length
+        btst    #sx.q68m4,sx_dspm-sx_con(a3) ; Q68 extended mode?
+        beq.s   chn_tst         ; no
+        tst.l   sd_scrb(a0)     ; avoid qptr dummy window
         beq.s   chn_set
-        move.l  #q68_screen,sd_scrb(a0) ; set new screen buffer addr
-        move.w  #256,sd_linel(a0)       ; and new line length
+        move.l  a5,sd_scrb(a0)  ; set new screen buffer addr
         bra.s   chn_set
         
         ENDGEN
-
-;       cmp.l   sd_scrb(a0),a5  is this the screen we are doing?
-; above is proper, but pander to qptr on it's dummy window... next 4 instrns
 
 chn_tst
         moveq   #ra_bot>>16,d0  treat zero screen base in qptr dummy as scr0
@@ -71,22 +85,12 @@ chn_tst
         tst.w   sd_scrb(a0)     ; msw is <0 if switching hi-res to lo-res
         bpl.s   chn_cmp
         move.l  d0,sd_scrb(a0)  ; reset base addr to $20000 (no dual screen)
-        move.w  #128,sd_linel(a0) ; and line length to 128
-        move.w  sd_xmin(a0),d0
-        add.w   sd_xsize(a0),d0
-        cmp.w   #512,d0
-        bhi.s   chn_rset
-        move.w  sd_ymin(a0),d0
-        add.w   sd_ysize(a0),d0
-        cmp.w   #256,d0
-        bls.s   chn_set         ; check if window would fit in 512x256 screen
-chn_rset
-        assert  sd_xmin,sd_ymin-2,sd_xsize-4,sd_ysize-6
-        clr.l   sd_xmin(a0)
-        move.l  #512<<16+256,sd_xsize(a0) ; reset to 512x256a0x0
         bra.s   chn_set
 
         ENDGEN
+
+;       cmp.l   sd_scrb(a0),a5  is this the screen we are doing?
+; above is proper, but pander to qptr on it's dummy window... next 4 instrns
 
 chn_cmp
         or.l    sd_scrb(a0),d0  get this channel's screen base
