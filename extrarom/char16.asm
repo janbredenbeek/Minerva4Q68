@@ -41,16 +41,12 @@ cs_char16
 
 * Set up the colour patterns
 
-;        movem.l (a1),d6-d7      fetch patterns
         suba.w  #16,sp          ; make room for 4 long words
         moveq   #0,d4           ; flag + offset
 masks_lp
         jsr     getmask16(pc)   ; get colour (even lines)
         move.l  d7,d6
         jsr     getmask16(pc)   ; get colour (odd lines)
-;        btst    #0,d1           odd row?
-;        bne.s   masks_ok        ... yes - carry on
-;        exg     d6,d7           ... no - swap the colour masks
 masks_ok
         movem.l d6-d7,(sp,d4.w) ; store masks
         bset    #3,d4           ; 0 goes to 8
@@ -84,10 +80,6 @@ font_set
         move.l  sd_scrb(a0),a1  base of screen
         mulu    sd_linel(a0),d1 and y * bytes per row
         add.l   d1,a1           gives the row address
-;        moveq   #7,d1
-;        and.w   d0,d1           the three ls bits of x form the shift
-;        lsr.w   #3,d0           and 8 pixels per byte
-;        moveq   #7,d1           ; bit counter for character column
         add.w   d0,d0           ... or rather per pair of bytes
         add.w   d0,a1           ... finishes off the screen address
 
@@ -111,18 +103,7 @@ inc_ok
         moveq   #0,d2           start field mask
         bset    d4,d2           ; d2 = $8000 .. $0001
         neg.w   d2              ; d2 = $8000 .. $ffff
-;        ror.l   #8,d2           ; d2 = $00000080 .. $ff0000ff
-;        ror.l   d1,d2           rotate character mask to position
-
-;        moveq   #0,d5           clear flash mask
         ror.l   #sd..dbwd+1,d3  are characters double width
-;        bpl.s   width_ok        ... no - that's done
-;        addq.w  #8,d1           set double width shift
-;        btst    #31-sd..dbwd+sd..flsh,d3 is flash required?
-;        beq.s   width_ok        ... no - check for extend
-;        move.w  #$4000,d5       set flash on bit
-;        bchg    d4,d5           set flash off bit
-;        ror.l   d1,d5           rotate flash mask to position
 width_ok
 
         moveq   #0,d0
@@ -150,11 +131,6 @@ hght_ok
 
 collist reg     d0/d6-d7/a1-a2
 col_loop
-;        movem.l collist,-(sp)
-;        move.b  d2,d3           replicate character mask byte
-;        lsl.w   #8,d2
-;        move.b  d3,d2           ; d2 = $00008080 .. $ff00ffff
-;        lsl.w   #8,d5           move flash mask up to ms byte
         moveq   #1,d1
         and.l   16+4(sp),d1     ; pick up original start row
         lsl.w   #2,d1           ; d1 flips between 0 and 4 for even/odd rows
@@ -175,9 +151,6 @@ row_loop
         beq.s   blank_row       if zero - ignore all the next rubbish
         tst.l   d3              for double width, spread characters out
         bpl.s   shft_chr
-;        tst.l   d5              are we setting flash at all?
-;        beq.s   noflash         no - that's ok
-;        and.b   #$7f,d3         yes - can't allow first bit to set ink!
 noflash
         move.w  d3,d4
         and.b   #15,d4          ; lower 4 bits
@@ -191,24 +164,19 @@ spread
         dc.l    $00030c0f,$30333c3f,$c0c3cccf,$f0f3fcff
         
 shft_chr
-;        ror.w   d1,d3           shift to position and replicate
         lsl.w   #8,d3           ; no dw, use only upper byte
 mask_chr
         and.w   d2,d3           mask character with field
         beq.s   blank_row       ; oops.. nothing left!
+        move.w  d3,a3           save masked character row in case dh
 ; loop for each 
 pix_loop
-;        move.b  d3,d4           replicate a byte
-;        lsl.w   #8,d3
-;        move.b  d4,d3
         lsl.w   #1,d3           ; get next bit from character column
         subx.w  d1,d1           ; set D1 to $0000 or $ffff 
 
 mask_ink
-        move.w  d1,a3           save masked character row in case dh
         move.w  d1,d4
         and.w   d7,d4           mask character with ink
-;        or.w    d5,d4           put flash in
         jsr     (a4)            call code for writing mode
         dbra    d5,pix_loop
         bra.s   end_row         ; next row
@@ -230,9 +198,6 @@ blank_row
 blank_2nd
         btst    #31-sd..dbwd+sd..trns,d3 is it anything but normal writing?
         bne.s   end_row         yes - nothing to do
-;        move.w  (a1),d4         pick up existing stuff
-;        eor.w   d6,d4           flip with paper pattern bits
-;        and.w   d2,d4           keep just the field area we want to affect
 blank_lp
         move.w  d6,(a1)+        ; just set pixel to paper colour!
         swap    d6              ; swap stipple pattern
@@ -242,7 +207,6 @@ blank_lp
 ; write mode routines
 ; d1.w -i   mask: 0 for paper, $ffff for ink
 ; d4.w -ip  d1 ANDed with ink colour mask
-; d5.w -i o pixel counter (updated)
 ; d6.w -ip  paper colour mask
 
 xor
@@ -255,13 +219,8 @@ transp
         bra.s   combine
 
 normal
-;        eor.w   d2,d3           invert character in field
-;        and.w   d6,d3           mask inverse character with paper
-;        or.w    d4,d3           put in ink/flash
-;        move.w  d2,d4           get inverted field mask in d4
         not.w   d1              ; invert mask
         and.w   d6,d1           ; mask inverse with paper
-        and.w   (a1),d1         blank out character area of screen
 combine
         or.w    d1,d4           combine the two
         move.w  d4,(a1)+        and put in screen
@@ -270,10 +229,8 @@ end_pix swap    d6              ; swap colours for next column
         rts
         
 end_row
-;        swap    d6              swap colours
-;        swap    d7
         movem.l (sp)+,pixlist
-        bchg    #2,d1           ; swap even and odd colours
+        bchg    #2,d1           ; swap even and odd line colours
         add.w   sd_linel(a0),a1 take next line
         tst.l   d4              check for double height
         bpl.s   next_row
@@ -287,17 +244,13 @@ dh_row
         movem.l pixlist,-(sp)   ; save registers again
         bset    #29,d4          is it 2nd row of a blank character?
         beq     blank_2nd       yes - go do that
-        move.w  a3,d1           restore the character
-        bra     mask_ink        go do normal stuff 
+        move.w  a3,d3           restore the character
+        bra     pix_loop        go do normal stuff 
 
 next_row
         dbra    d0,row_loop
 
 col_end
-;        movem.l (sp)+,collist   recover various registers
-;        clr.w   d2              check for any remaining bits
-;        rol.l   #1,d2           ... by rotating mask to next bit
-;        bne.s   nxt_col         if there's more, go do it
 getout
         adda.w  #16,a7          ; drop storage for colour masks
         movem.l (sp)+,reglist
@@ -321,14 +274,5 @@ get_mask
         swap    d7
 noswap
         rts
-;nxt_col
-;        clr.w   d5              roll in next byte's worth of flash mask
-;        rol.l   #8,d5
-;        asr.l   #4,d4           reset dh flags
-
-;        eor.b   #8,d1           flip bytes on the rotate
-;        subq.w  #1,d1           ; count down character column bit to shift out
-;        addq.l  #2,a1           move to next column
-;        bra.l   col_loop
 
         end
