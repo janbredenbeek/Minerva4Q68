@@ -120,7 +120,7 @@ Current issues:
 
 - The SD-card driver requires a CARD_INIT 2 command to use the SD card in slot 2; other SD-card related commands are presently not implemented.
 - The maximum amount of RAM supported is limited to 16MB, as the slave block system's structure currently prevents supporting more RAM.
-- The serial port and mouse interface of the Q68 are currently not supported. The QLNET and Ethernet interfaces are supported using external utilities, see https://dilwyn.qlforum.co.uk/q68/index.html for more information.
+- The serial port of the Q68 is currently not supported. The QLNET and Ethernet interfaces are supported using external utilities, see https://dilwyn.qlforum.co.uk/q68/index.html for more information.
 - Some users of Q68 boards with newer firmware (v1.05) have reported problems with the keyboard and the Q68 'freezing' after the F1/F2 prompt. These are currently under investigation. Please use the Issues section to report any problems, stating as much information as possible (including the firmware version, which can be read from the Q68's initial boot screen; temporary removal of the SD card will give you enough time to read it).
 
 Contributors:
@@ -129,10 +129,12 @@ Contributors:
 - Minerva operating system by Laurence Reeves;
 - Keyboard driver: Richard Zidlicky, Jan Bredenbeek
 - SDHC device driver: Peter Graf, Wolfgang Lenerz
+- Mouse driver: Peter Graf
 
 Version history:
 ----------------
 
+- 5 November 2023: Added mouse support via external driver from Peter Graf (see mouse subdirectory)
 - 2 August 2023: extrarom v1.5 released. Included ALFM and FREE_FM keywords (allocate fast memory, see Q68 manual). Building environment moved from Linux to SMSQ/E. Credits added for the SDHC driver to Peter Graf.
 - 9 July 2023: v1.4 released. Implemented 1024x768x4 mode (beta)
 - 29 June 2023: v1.3 released. Support for external interrupts on all Q68 firmware versions, support for keyboard interrupt on newer firmware versions, one language version now for all three keyboard layouts.
