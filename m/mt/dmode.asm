@@ -118,22 +118,39 @@ mt_dmode
         
         GENIF   Q68_HIRES = 1
         
-        btst    #sx.q68m4,sx_dspm(a4) ; test if we want Q68 1024x768 mode
+        btst    #sx.q68m4,sx_dspm(a4) ; test if we want Q68 extended mode
         beq.s   qlmode          ; no, ordinary QL modes
         tst.b   d1              ; d1.b is <0 for only reading mode
         bmi.s   ret_ext
+        assert  sx_dmod,sx_llen-1,sx_xlim-3,sx_ylim-5
+        lea     llen_tab(pc),a0
+        lea     sx_dmod(a4),a1
+        moveq   #7,d0
+        and.b   d1,d0           ; limit extended modes to 0-7
+        move.b  d0,q68_dmode    ; set Q68 screen mode
+        move.b  d0,(a1)+        ; set sx_dmod
+        add.w   d0,d0           ; double for index
+        move.w  (a0,d0.w),(a1)+   ; set sx_llen
+        move.w  xlim_tab-llen_tab(a0,d0.w),(a1)+ ; set sx_xlim
+        move.w  ylim_tab-llen_tab(a0,d0.w),(a1)+ ; set sx_ylim
         move.l  #q68_screen,a5  ; base of Q68 extended screen buffer
-        bclr    #3,sv_mcsta(a6) ; ensure 4-colour mode
+        bclr    #3,sv_mcsta(a6) ; ensure no MODE 8 bit
         jsr     sd_fresh(pc)    ; redraw windows
-        move.b  #q68.dl4,q68_dmode ; set Q68 screen mode
 ret_ext
         moveq   #0,d1           ; return d1 and d2 always 0 for compatibility
         moveq   #0,d2
         movem.l reg_on1,-(sp)   ; re-stack
         bra     dm_exit         ; and exit
-        
+
         ENDGEN
+
 qlmode
+        assert  sx_dmod,sx_llen-1,sx_xlim-3,sx_ylim-5
+        lea     sx_dmod(a4),a1  
+        clr.b   (a1)+           ; set sx_dmod always 0 for QL mode
+        move.w  #$80,(a1)+      ; sx_llen
+        move.l  #512<<16+256,(a1) ; sx_xlim & sx_ylim
+        
         jsr     ss_jobc(pc)     find current job
 
         move.w  d1,d3           working copy of d1.w
@@ -266,5 +283,16 @@ setmc
         move.b  d0,sv_mcsta(a6)
 ret
         rts
-        
+
+; DISP_MODE       0,  1,  2,   3,   4,   5,  6,   7
+; bits-per-pixel:4*,  2, 16, 16,  2,  8, 16, 16
+llen_tab:
+        dc.w    128,128,1024,2048,256,1024,1024,2048
+xlim_tab:
+        dc.w    512,512,512,1024,1024,1024,512,1024
+ylim_tab:
+        dc.w    256,256,256,512,768,768,384,768
+
+; * DISP_MODE 0 is old QL MODE 8 with 256 pixels across, but still a 512x256
+;   coordinate system. Therefore SCR_XLIM returns 512, as is the convention.
         end

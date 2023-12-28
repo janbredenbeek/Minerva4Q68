@@ -8,6 +8,10 @@
         include 'm_inc_err'
         include 'm_inc_io'
         include 'm_inc_sd'
+        include 'm_inc_sv'
+        include 'm_inc_sx'
+        include 'm_mincf'
+        include 'm_inc_q68'
 
         section sd_entry
 
@@ -51,10 +55,19 @@ branch
         move.w  d0,d1           ... and put them in the right position
         swap    d0
         move.b  sd_cattr(a0),d3 set attributes
-        lea     sd_smask(a0),a1 ... colours
-        movem.l sd_font(a0),a2/a3 ... and font
+
+        movem.l sd_font(a0),a2/a3 ... font
         pea     sd_ncol(pc)     move to next column on return
-        jmp     cs_char(pc)     go do the character
+        move.l  sv_chtop(a6),a1
+        btst    #sx..m33,sx_dmod(a1) ; are we doing MODE 33?
+        lea     cs_char(pc),a1       ; assume no
+        beq.s   ql_mode
+        move.l  cs.char16,a1
+ql_mode 
+        move.l  a1,-(sp)        ; push address of handler
+        lea     sd_smask(a0),a1 set colours
+;        jmp     cs_char(pc)     go do the character
+        rts                     ; and go!
 
 * Rest of the code for other sd entries
 

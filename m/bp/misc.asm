@@ -3,7 +3,7 @@
 
         xref    bp_chand
 *        xref    bv_chri
-        xref    ca_gtin1,ca_gtint,ca_gtlin
+        xref    ca_gtin1,ca_gtint,ca_gtlin,ca_gtli1
         xref    ib_errep
 *        xref    mm_clrr
         xref    ut_err
@@ -11,8 +11,10 @@
         include 'm_inc_err'
         include 'm_inc_mt'
         include 'm_inc_sv'
+        include 'm_inc_sx'
         include 'm_inc_bv'
         include 'm_inc_assert'
+        include 'm_mincf'
 
         section bp_misc
 
@@ -38,9 +40,22 @@ okrts
         rts
 
 * MODE p1{,p2} sets the display mode
+; Since the MT.DMODE trap now behaves differently when bit 4 of sx_dspm is set
+; (when we are in one of the Q68 high-resolution modes), we don't want to
+; throw MODE changes at unsuspecting users. Therefore, when we are in hi-res
+; mode, we simply ignore the MODE command (like SMSQ/E does).
 bp_mode
         jsr     ca_gtint(pc)
         bne.s   rts0
+
+        GENIF   Q68_HIRES <> 0
+        moveq   #mt.inf,d0
+        trap    #1
+        move.l  sv_chtop(a0),a0
+        btst    #sx.q68m4,sx_dspm(a0)
+        bne     okrts
+        ENDGEN
+
         movem.w 0(a6,a1.l),d1-d2
         subq.w  #2,d3
         beq.s   set_it
@@ -135,7 +150,9 @@ rndgrot
 
 * BAUD rate: sets the baud rate for the serial ports
 bp_baud
-        jsr     ca_gtin1(pc)    get the baud rate to d1
+;        jsr     ca_gtin1(pc)    get the baud rate to d1
+***     now allow for baud rates > 32767 (Q68!)
+        jsr     ca_gtli1
         bne.s   rts0
         moveq   #mt.baud,d0
 trap1

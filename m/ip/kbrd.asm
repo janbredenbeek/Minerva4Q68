@@ -68,7 +68,8 @@ sptab
 *                       shift/ctrl/alt/space    event 7 = user event 1
         spent   ctlt    ctrl/tab                alternate screen
         spent   frez    ctrl/alt/tab            toggle display freeze
-        spent   rts0    shift/ctrl/tab          reserve... easy to key!
+;        spent   rts0    shift/ctrl/tab          reserve... easy to key!
+        spent   user    shift/ctrl/tab ; JB: changed b/c scae didn't work
         spent   soft    shift/ctrl/alt/tab      soft reset
         spent   comp    ctrl/enter              compose
         spent   ctlc    ctrl/alt/enter          cursor to next queue

@@ -132,5 +132,13 @@ q68_v2		equ	$17d20		; (byte) if set : hardware v.2
 ; q68 specific config
 q68.cfgkb	 equ	 $20		 ; position in config block of kbd delay
 
+; RAM vectors for 16-bit screen driver cs_* routines
+
+cs.char16       equ     $19004
+cs.scrol16      equ     $19008
+cs.pan16        equ     $1900c
+cs.fill16       equ     $19010
+cs.over16       equ     $19014
+cs.recol16      equ     $19018
 
   ENDGEN

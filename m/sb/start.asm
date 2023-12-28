@@ -8,14 +8,16 @@
         xref    bv_chnlx,bv_chnt,bv_namei,bv_om
         xref    cn_date,cn_day
         xref    ib_clvv
-        xref    ii_clock
         xref    sb_unvr
         xref    ut_con,ut_err,ut_mint,ut_mtext,ut_wrdef
 
-    GENIF Q68_KEY <> 0
-        xref.l q68kbd_init
-    ENDGEN
+        GENIF   QL_IIC <> 0
+        xref    ii_clock
+        ENDGEN
 
+        GENIF Q68_KEY <> 0
+        xref.l q68kbd_init
+        ENDGEN
 
         include 'm_inc_assert'
         include 'm_inc_bv'
@@ -372,9 +374,16 @@ ini_disp
         trap    #1
         move.l  d2,-(sp)        store qdos version number
         move.l  #10<<24!10<<16!'  ',-(sp) nl,nl,sp,sp
+
+        GENIF   QL_IIC <> 0
         jsr     ii_clock(pc)    get i2c clock if it's there
-;       moveq   #mt.rclck,d0
-;       trap    #1
+        ENDGEN
+
+        GENIF   QL_IIC = 0
+        moveq   #mt.rclck,d0
+        trap    #1
+        ENDGEN
+        
         move.l  sp,a1
         sub.w   #2+34-8,sp
         sub.l   a6,a1

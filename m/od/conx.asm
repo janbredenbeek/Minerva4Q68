@@ -118,7 +118,7 @@ open_sub
         bclr    #sx.q68m4,d0    ; test for Q68 1024x768 mode
         beq.s   op_lores
         move.w  #q68_screen>>16,sd_scrb(a0)
-        lsl     sd_linel(a0)    ; set screen addr & adjust line length
+        move.w  sx_llen(a4),sd_linel(a0)    ; set screen addr & adjust line length
         bra.s   setscr0         ; skip dual-screen test
 
         ENDGEN

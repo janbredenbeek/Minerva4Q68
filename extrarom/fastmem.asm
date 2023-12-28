@@ -4,7 +4,7 @@
 
 	xdef	alfm
 	xdef	free_fmem
-        xdef    rom_end
+        xdef    stk_long
 
         include m_mincf
         include m_inc_sv
@@ -48,13 +48,14 @@ ffmem2
 	clr.l	d1			; nothing remains
 ok	rts
 
+errbp   moveq   #err.bp,d0
+        rts
+
 alfm    move.w  ca.gtint,a2             ; get integer parameter
         jsr     (a2)
 	bne.s	ok
-        moveq   #6,d1                   ; check if there's room for float
-        move.w  bv.chrix,a2             ; result
-        jsr     (a2)
-        move.l  bv_rip(a6),a1
+        subq.w  #1,d3                   ; check for exactly 1 argument
+        bne.s   errbp
 	move.w	(a6,a1.l),d0            ; get required space
 	addq.l	#1,d0
 	bclr	#0,d0			; make sure it's even
@@ -70,9 +71,14 @@ alfm    move.w  ca.gtint,a2             ; get integer parameter
 	add.l	d0,d3			; new Sram free space
 	move.l	d3,(a2)
         andi.w  #$dfff,sr               ; back to user mode
+stk_long:                               ; this entry stacks a long word in D1
+        move.l  d1,d4
+        moveq   #6,d1                   ; check if there's room for float
+        move.w  bv.chrix,a2
+        jsr     (a2)
         move.l  bv_rip(a6),a1
         subq.l  #4,a1
-        move.l  d1,(a6,a1.l)            ; stack long integer
+        move.l  d4,(a6,a1.l)            ; stack long integer
         moveq   #9,d0                   ; RI.FLONG (minerva only!)
         moveq   #0,d7                   ; REALLY NEEDED?
         move.w  ri.exec,a2
@@ -84,7 +90,5 @@ alfm    move.w  ca.gtint,a2             ; get integer parameter
 oom	andi.w  #$dfff,sr               ; go back to user mode first!
         moveq	#err.om,d0
 	rts
-
-rom_end  equ      *
 
 	end

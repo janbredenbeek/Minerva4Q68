@@ -66,9 +66,10 @@ sv_sound ds.w   1       sound status (only 1st byte used?)
 sv_ser1c ds.l   1       receive  channel 1 queue address
 sv_ser2c ds.l   1       receive  channel 2 queue address
 sv_tmode ds.b   1       ZX8302 transmit mode (includes last baud rate)
-        ds.b    1       spare
+sys_ptyp ds.b   1       processor type (currently always 0)
 sv_csub ds.l    1       subroutine to jump to on capslock (only reach + 32767!)
 sv_timo ds.w    1       timeout for switching transmit mode
+sys_mtyp equ    sv_timo+1 (B) machine type (Q68 only = 18)
 sv_timov ds.w   1       ser1/2 control bytes: 7=lost 6=frame 3=inhib 2..0=baud
 sv_fstat ds.w   1       flashing cursor count (silly if > about 16!)
 

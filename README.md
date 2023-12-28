@@ -6,7 +6,7 @@ Description
 
 A port of the Minerva operating system for the Q68 (Sinclair QL clone).
 
-The Minerva operating system was originally designed as a replacement ROM operating system for the Sinclair QL computer, currently licenced under GPLv3. This port is aimed at the Q68, an FPGA-based replacement board for the QL. It is not intended as a serious alternative for the SMSQ/E OS supplied with the Q68, as SMSQ/E is far more extensive and better suited to support the Q68 hardware than the 48K ROM-based Minerva. We just provide this port to demonstrate the Q68's ability to run 'oldskool' ROM images, give Q68 users the Minerva look and feel, and maybe provide an opportunity to run badly written software that doesn't run on SMSQ/E (but chances are big that this software won't run on Minerva either).
+The Minerva operating system was originally designed as a replacement ROM operating system for the Sinclair QL computer, currently licenced under GPLv3. This port is aimed at the Q68, an FPGA-based replacement board for the QL. It is not intended as a replacement for the SMSQ/E OS supplied with the Q68, as SMSQ/E is far more extensive and better suited to support the Q68 hardware than the 48K ROM-based Minerva. We just provide this port to demonstrate the Q68's ability to run 'oldskool' ROM images, give Q68 users the Minerva look and feel, and maybe provide an opportunity to run badly written software that doesn't run on SMSQ/E (but chances are big that this software won't run on Minerva either).
 
 The current Minerva build is based on v1.98, with a few modifications to run successfully on the Q68.
 
@@ -115,12 +115,39 @@ Note that you must switch to 1024x768 mode *BEFORE* activating the Pointer Inter
 
 The functions SCR_BASE, SCR_LLEN, SCR_XLIM and SCR_YLIM return the base address, pixel line length in bytes, and X and Y limits of the current screen mode, like their SMSQ/E counterparts. In the current version, any parameters are ignored.
 
+SERIAL PORT SUPPORT
+-------------------
+
+From v1.6 onwards, the Q68's serial port is supported using a new driver in the ROM image. It offers the following features:
+
+- Configurable port name; default SER1 but can be changed using the SER_USE command
+- Alternative port names for transmit- and receive-only channels (STXx/SRXx), for use with SERnet
+- Baud rate configurable from 1200 to 230400 bits per second (using normal BAUD command)
+- Flow control using XON/XOFF protocol with optional data transparency (between two Q68s or Q68 and QIMSI)
+- Configurable transmit- and receive buffers using SER_BUFF command
+
+The Q68's serial port is much faster than the original QL's SER ports, but unfortunately lacks CTS/RTS lines so all flow control has to be done in software using XON/XOFF handshake. The original QDOS/Minerva driver has only fixed-size buffers of 81 bytes, which is not adequate for handling high speeds. SMSQ/E, by contrast, has buffers of configurable size, and by default uses dynamic-size transmit buffers which can grow to insane size (probably designed to send files in quick succession to a printer). Unfortunately, all current versions of SMSQ/E do not support the XON/XOFF protocol even though the driver accepts 'X' as option on channel opens or as parameter to the SER_FLOW command, so sending or receiving files from or to the Q68 at full speeds will more or less lead to data corruption. 
+
+Reliable transfers are possible using SERnet (https://dilwyn.qlforum.co.uk/tk/sernet.zip; please use v2.25 as v3 will not work with Minerva). When using default buffer size, it is not necessary to enable XON/XOFF flow control, so specifying SRX1I/STX1I as device name will be sufficient. Using SERnet, I was able to achieve througputs up to 8.5K bytes at 115200 bps, which is twice as fast as the original QLAN network.
+
+Commands available are:
+
+- SER_USE *name*, where *name* should be a four-character device name. It main use is to substitute an existing SER port such as ser2 or ser3, so existing software using these names will be able use the port. In addition, the STX and SRX transmit-only and receive-only devices will have their last character modified as well, so entering SER_USE SER2 will change these names to STX2 and SRX2 respectively.
+- SER_FLOW takes a one-letter parameter *I*, *H*, or *X*, where
+  - *I*: stands for no flow-control (i.e. send at full speed, ignore XON/XOFFs sent by the remote)
+  - *X*: use XON/XOFF flow control when sending and receiving. This is not transparent to the data; if your data contains either of these characters (11H and 13H) this will disrupt transfers. Only use it when sending plain text data.
+  - *H*: Use XON/XOFF flow control but escape these characters in the data stream (using DLE, so XON will be sent as 10H followed by 'Q' and XOFF as 10H followed by 'S'). Using this technique, full 8-bit data transfers will be possible whilst still providing flow control (equivalent to using the *H* option with DTR/CTS handshake on the original QL's SER ports). This is an implementation-specific extension to the protocol and will only work between two Q68s using the SER driver, or a QIMSI serial port using SER4.
+  - Note that these options may also be specified when opening a channel to the port; e.g. OPEN#3,ser1x will open the serial port and use XON/XOFF flow control.
+- SER_BUFF *txbuffer*,*rxbuffer* sets the size of the transmit buffer and (optionally) the receive buffer. This allows you to configure the transmit and receive buffers, like SMSQ/E's SER_BUFF command. Its behaviour is somewhat different in that the default sizes are 16384 bytes for the receive buffer and 1024 bytes for the transmit buffer, and that dynamic-sized transmit buffers are not possible (they will usually fail when flow control has to be asserted, e.g. with Zmodem transfers).
+- SER_ROOM *threshold* sets the receive buffer's threshold for asserting flow control. When the receive buffer has been filled up to the point where there are less than *threshold* bytes free, a XOFF is sent to the remote. This threshold is also affected by SER_BUFF, which sets it to 1/4th of the receive buffer size. When the receive buffer has been emptied for 75 percent of its size, a XON character will be sent to the remote.
+- SER_CLEAR clears both input and output buffers.
+
 Current issues:
 ---------------
 
+- The maximum amount of RAM supported is limited to 16MB, as the slave block system's structure currently prevents supporting more RAM. If you can do with less, I even recommend to cut RAM to a lower value using CALL 390,<RAMTOP value in bytes> to limit the size of the slave block table and speed up file access (see Minerva manual for more CALL 390 boot-time options).
 - The SD-card driver requires a CARD_INIT 2 command to use the SD card in slot 2; other SD-card related commands are presently not implemented.
-- The maximum amount of RAM supported is limited to 16MB, as the slave block system's structure currently prevents supporting more RAM.
-- The serial port of the Q68 is currently not supported. The QLNET and Ethernet interfaces are supported using external utilities, see https://dilwyn.qlforum.co.uk/q68/index.html for more information.
+- The QLNET and Ethernet interfaces are supported using external utilities, see https://dilwyn.qlforum.co.uk/q68/index.html for more information.
 - Some users of Q68 boards with newer firmware (v1.05) have reported problems with the keyboard and the Q68 'freezing' after the F1/F2 prompt. These are currently under investigation. Please use the Issues section to report any problems, stating as much information as possible (including the firmware version, which can be read from the Q68's initial boot screen; temporary removal of the SD card will give you enough time to read it).
 
 Contributors:
@@ -128,12 +155,18 @@ Contributors:
 
 - Minerva operating system by Laurence Reeves;
 - Keyboard driver: Richard Zidlicky, Jan Bredenbeek
-- SDHC device driver: Peter Graf, Wolfgang Lenerz
 - Mouse driver: Peter Graf
+- SDHC device driver: Peter Graf, Wolfgang Lenerz
+- Serial driver: Jan Bredenbeek
 
 Version history:
 ----------------
 
+- 28 December 2023: v1.6 released. 
+  - Added serial port support (see above)
+  - Q68 hardware is now properly reset when loading using LRESPR
+  - Added SLUG command (SLUG 0 is maximum speed, SLUG 255 slows down to a crawl)
+  - KEYROW emulation improved and now works even if interrupts are disabled, as many games do.
 - 5 November 2023: Added mouse support via external driver from Peter Graf (see mouse subdirectory)
 - 2 August 2023: extrarom v1.5 released. Included ALFM and FREE_FM keywords (allocate fast memory, see Q68 manual). Building environment moved from Linux to SMSQ/E. Credits added for the SDHC driver to Peter Graf.
 - 9 July 2023: v1.4 released. Implemented 1024x768x4 mode (beta)

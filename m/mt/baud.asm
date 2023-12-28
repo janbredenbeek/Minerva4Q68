@@ -1,15 +1,21 @@
 * Sets the baud rate
         xdef    mt_baud
 
-        xref    ip_adcmd
-        xref    ss_rte,ss_wser,ss_rser
+        xref    ss_rte
 
+        include 'm_mincf'
         include 'm_inc_sv'
         include 'm_inc_sx'
         include 'm_inc_err'
         include 'm_inc_pc'
         include 'm_inc_ipcmd'
         include 'm_inc_assert'
+        include 'm_inc_q68'
+
+        GENIF   QL_SER <> 0
+        xref    ip_adcmd
+        xref    ss_wser,ss_rser
+        ENDGEN
 
         section mt_baud
 
@@ -31,6 +37,8 @@
 
 * The old code simply sets bits 2..0 of each byte of sv_timov to the calculated
 * 0..7 baud rate, provided they do not have their inhibit flag (bit 4) set.
+
+        GENIF   QL_SER <> 0    ; this section for real QL only
 
 reglist reg     d3/d6/a0-a2/a4
 
@@ -103,5 +111,42 @@ orinbaud
         or.b    d7,(a4)         change baud rate in this slot
 rts0
         rts
+        
+        ENDGEN
+        
+        GENIF   Q68_SER <> 0    ; Q68 serial port
+
+* For the Q68, D1 may be specified as word (for speeds < 115200) or long.
+* For the long form, match on 115200 and 230400, else match on lsw only.
+
+n_bauds equ     9               ; nine possible values
+
+mt_baud 
+        moveq   #(n_bauds-1)*2,d0
+        lea     bauds+n_bauds*4,a1    ; past end of table
+baud_lp
+        cmp.l   -(a1),d1        ; try to match baudrate
+        beq.s   set_baud        ; found!
+        subq.w  #2,d0           ; next rate down
+        bmi.s   baud_bp         ; no luck - report error
+        cmpi.w  #6*2,d0         ; have we reached 57600?
+        bne.s   baud_lp         ; no
+        andi.l  #$ffff,d1       ; clear bits 15-8
+        bra     baud_lp
+set_baud                        ; set prescaler value
+        move.w  prescale(pc,d0.w),uart_prescale
+        moveq   #0,d0
+baud_ex
+        jmp     ss_rte
+baud_bp
+        moveq   #err.bp,d0
+        bra     baud_ex
+        
+prescale                        ; prescaled values according to baud rate
+        dc.w    2082,1041,520,259,129,64,42,21,10
+bauds                           ; allowed baud values
+        dc.l    1200,2400,4800,9600,19200,38400,57600,115200,230400
+
+        ENDGEN
 
         end

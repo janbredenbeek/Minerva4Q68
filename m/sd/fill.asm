@@ -8,6 +8,9 @@
         include 'm_inc_mc'
         include 'm_inc_sd'
         include 'm_inc_sv'
+        include 'm_inc_sx'
+        include 'm_mincf'
+        include 'm_inc_q68'
 
         section sd_fill
 
@@ -20,14 +23,25 @@
 * a1 c   pointer to block definitions
 
 sd_fill
+        GENIF   Q68_M33 <> 0
+        move.l  sv_chtop(a6),a2
+        btst    #1<<sx..m33,sx_dmod(a2) ; MODE 33?
+        beq.s   sd_fill2                ; no, use QL mode
+        move.l  cs.fill16,a3            ; get vector to 16-bit fill
+        btst    #sd..xor,sd_cattr(a0)
+        beq.s   csset                   ; .. unless OVER -1
+        move.l  cs.over16,a3
+        bra.s   csset
+        ENDGEN
+sd_fill2
         btst    #sd..xor,sd_cattr(a0) is xor bit set?
         lea     cs_fill(pc),a3  no - assume fill
         beq.s   csset
         lea     cs_over(pc),a3  yes - it's over required
-csset
+csset        
         move.l  a1,a2
         subq.l  #4,sp
-        move.l  sp,a1
+        move.l  sp,a1           ; buffer for colour masks
         jsr     cs_color(pc)
         movem.l (a2),d2-d3      fetch block size and position
         btst    #mc..m256,sv_mcsta(a6) is it low res

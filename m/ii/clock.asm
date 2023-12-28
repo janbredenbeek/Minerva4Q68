@@ -1,5 +1,6 @@
 * Copy clock to internal from I2C, if it's there
-        xdef    ii_clock
+
+;        xdef    ii_clock
 
         xref    bf_datez
 
@@ -8,6 +9,7 @@
         include 'm_inc_sv'
         include 'm_inc_sx'
         include 'm_inc_vect'
+        include 'm_mincf'
 
 * I2C RAM layout:
 * 0-7 clock
@@ -39,11 +41,15 @@ sp_rom  ds.w    1       .w where the ROM disable word is sent
 
         section ii_clock
 
+        GENIF   QL_IIC <> 0
+
 * d0 -  o- 0
 * d1 -  o- seconds since dot
 * a0 -i  - system variables base
 * a6 -ip - basic variables base
 * d2-d4/d6/a1-a4 destroyed
+
+        xdef    ii_clock
 
 ii_clock
         move.l  sv_free(a0),a1  set buffer pointer
@@ -139,5 +145,7 @@ cmd
         dc.b    1,%10100000,22          start, write address of lsw of boot
         dc.b    4,%10001100             write boot/year+flag from buffer, stop
         dc.b    $ff                     finish
+
+        ENDGEN
 
         end

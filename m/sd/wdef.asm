@@ -34,22 +34,19 @@ sd_wdef
         exg     d1,d3           and ymin in the right place
 
         move.w  #256,d4         bit number 0 and ready to check y
-        
-        GENIF   Q68_HIRES = 1
-        
         move.l  sv_chtop(a6),a1
-        btst    #sx.q68m4,sx_dspm(a1)
-        beq.s   wdef_chk
-        move.w  #768,d4         ; Q68 1024x768
-        
-        ENDGEN
-        
+        btst    #sx.q68m4,sx_dspm(a1) ; Q68 extended mode?
+        beq.s   wdef_chk        ; no, use 256 for ylim
+        move.w  sx_ylim(a1),d4  ; else, get ylim from variable
 wdef_chk
         bclr    d4,d0           ensure both xwidth and xmin are even
         bclr    d4,d2
         bsr.s   xycheck         check that ymin/ywidth are sensible
-;        add.w   d4,d4           = 512, ready to check x
-        add.w   #256,d4         ; 256 goes to 512, 768 goes to 1024
+        add.w   d4,d4           = 512, ready to check x
+        btst    #sx.q68m4,sx_dspm(a1) ; Q68 extended mode?
+        beq.s   wdef_ck2        ; no, use 512
+        move.w  sx_xlim(a1),d4  ; else, get xlim from variable
+wdef_ck2
         bsr.s   xycheck         check that xmin/xwidth are sensible
         clr.w   sd_borwd(a0)    reset border width (lwr: why?)
         bra.s   border
@@ -90,7 +87,13 @@ error
         bra.s   exit
 
 fill
-        jmp     cs_fill(pc)
+        move.l  sv_chtop(a6),a2
+        btst    #sx..m33,sx_dmod(a2)
+        lea     cs_fill(pc),a2
+        beq.s   fill2
+        move.l  cs.fill16,a2
+fill2
+        jmp     (a2)
 
 * Entry point to just redefine a border
 

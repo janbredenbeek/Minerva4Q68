@@ -8,6 +8,22 @@
 ; 
 ; Changelog:
 ;
+; 20231228 JB (v1.6, release)
+;   KEYROW emulation via MT.IPCOM front-end now scans keyboard when interrupts
+;   are disabled, so should work with games now. Note that it still depends on
+;   the supervisor stack being in its original place (Minerva sets A6 to be at
+;   the base of the same 32K segment where the SSP is)!
+;   Also implemented SLUG command (0 = fastest, 255 = slowest)
+;
+; 20231121 JB (v1.6, interim)
+;   'special' keys (CTRL-SPC/TAB/ENTER etc) now set KEYROW bits too
+;
+; 20231117 JB (v1.6, interim)
+;   Fixed CTRL-ENTER code in tables
+;
+; 20231027 JB (v1.6, interim)
+;   Implemented MACHINE and PROCESSOR functions
+;
 ; 20230721 JB (v1.5)
 ;   Implemented ALFM, FREE_FMEM functions. Development ported to SMSQ/E
 ;
@@ -43,9 +59,9 @@
 ;   Set symbol q68_keyc to 1 for US, 44 for UK and 49 for DE
 
         xref    disp_mode,scr_base,scr_llen,scr_xlim,scr_ylim
-        xref    free_fmem,alfm,rom_end
+        xref    free_fmem,alfm,ser_init,rom_end
 
-version	setstr	1.5
+version	setstr	1.6
 
 DEBUG	equ	0		; set to 1 to display variables and result code
 
@@ -62,6 +78,10 @@ DEBUG	equ	0		; set to 1 to display variables and result code
         include m_inc_vect
         include m_inc_q68
 
+        GENIF   Q68_M33 <> 0
+        xref    q68scr_init
+        ENDGEN
+
 string$	macro	a
 	noexpand
 [.lab]	dc.w	.e.[.l]-*-2
@@ -73,8 +93,8 @@ string$	macro	a
 BOOTDEV equ     0
 
 ; This is the start of the extension ROM header.
-; Since our code is only about 2K and the system ROM scans for extension ROMs
-; in increments of 16K, we would waste nearly 14K of space which could be
+; Since our code is only a few K and the system ROM scans for extension ROMs
+; in increments of 16K, we would waste a lot of of space which could be
 ; occupied by another extension ROM. Also, Wolfgangs's SD-card driver is about
 ; 20K in length, wasting 12K of valuable ROM space. By combining our code with
 ; the SD-card driver, we can free up 16K in the $14000-$17FFF area, thus
@@ -92,30 +112,57 @@ BOOTDEV equ     0
         
 romh:
 	dc.l	$4afb0001       ; ROM marker
-	dc.w	procs-romh	; no procs to declare
+	dc.w	procs-romh
 	dc.w	rom_init-romh
-	string$	{'Q68 extension ROM v[version]',10}
-         ds.w     0
+	string$	{'Q68 extension ROM v[version]  JB 2023',10}
+        ds.w     0
 
-rom_init bsr.s    q68kbd_init       ; do our own initialisation
-         move.l   a3,-(sp)          ; save ROM pointer
-         lea      rom_end(pc),a3    ; end of our code
-         cmpi.l   #$4afb0001,(a3)   ; is there another extension ROM after us?
-         bne.s    bye               ; no, exit
-         lea      8(a3),a1          ; ROM name
-         suba.l   a0,a0
-         move.w   ut.mtext,a2       ; print it
-         jsr      (a2)
-         move.w   4(a3),d0          ; S*Basic procs?
-         beq.s    in_nobas          ; no
-         lea      (a3,d0.w),a1
-         move.w   bp.init,a2        ; else, link them in
-         jsr      (a2)
-in_nobas move.w   6(a3),d0          ; init routine?
-         beq.s    bye               ; no
-         jsr      (a3,d0.w)         ; else, call it
-bye      move.l   (sp)+,a3          ; restore ROM pointer
-         rts
+rom_init 
+        moveq	#0,d0
+	trap	#1
+	cmpi.l	#'1.60',d2	; check QDOS version
+	blo.s	initerr		; must be Minerva
+	cmpi.l	#'2.00',d2	; not SMSQ/E...
+	bhs.s	initerr
+        move.b  #CPU,sys_ptyp(a0)
+        move.b  #SYS_MACHINE,sys_mtyp(a0)
+	move.l	sv_chtop(a0),a4	; base of extended sysvars
+	lea	$b0(a4),a0	; linkage block of MDV driver         
+	moveq	#$23,d0		; MT.RDD
+	trap	#1		; unlink MDV driver
+        bsr.s   q68kbd_init       ; initialise keyboard
+        bne.s   initerr
+        jsr     ser_init
+        bne.s   initerr
+        GENIF   Q68_M33 <> 0
+        jsr     q68scr_init       ; initialise screen driver
+        ENDGEN
+        
+        move.l  a3,-(sp)          ; save ROM pointer
+        lea     rom_end(pc),a3    ; end of our code
+        cmpi.l  #$4afb0001,(a3)   ; is there another extension ROM after us?
+        bne.s   bye               ; no, exit
+        lea     8(a3),a1          ; ROM name
+        suba.l  a0,a0
+        move.w  ut.mtext,a2       ; print it
+        jsr     (a2)
+        move.w  4(a3),d0          ; S*Basic procs?
+        beq.s   in_nobas          ; no
+        lea     (a3,d0.w),a1
+        move.w  bp.init,a2        ; else, link them in
+        jsr     (a2)
+in_nobas
+        move.w   6(a3),d0          ; init routine?
+        beq.s    bye               ; no
+        jsr      (a3,d0.w)         ; else, call it
+bye     
+        move.l   (sp)+,a3          ; restore ROM pointer
+        rts
+
+initerr	suba.l	a0,a0
+        lea	inerrms,a1
+	move.w	$d0,a2
+	jmp	(a2)		; print error message
 
 ****** q68 PS2 keyboard interface ********
 
@@ -165,7 +212,7 @@ VAR.KEYdwc   EQU	$5D	; (byte) count of keys held down
 VAR.KEYdwk   EQU	$5E	; (16 x byte) ACTUAL key-down list
 VAR.KEYdwa   EQU	$6E	; (16 x byte) ASCII key-down list
 
-VAR.LEN	    EQU	$7E	; length of vars
+VAR.LEN	     EQU	$7E	; length of vars
 
 *workaround broken gwass
 vdwak	equ	VAR.KEYdwa-VAR.KEYdwk
@@ -180,15 +227,6 @@ vdwak	equ	VAR.KEYdwa-VAR.KEYdwk
 ;	+ KEY_decode: press/relse, modifier and weird keys
 * /home/rz/qdos/qdos-classic/QZ-net/CLSC/SRC/ISA/804Xd_asm - keytable-de
 
-
-
-***************************************************************
-** Q40 KBD_asm
-
-*	INCLUDE	'CLSC_SRC_CORE_KBD_inc'
-; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-;  start of ROM code
-
 initreg	reg	d1-d3/a0-a4
 
 q68kbd_init:
@@ -202,20 +240,9 @@ q68kbd_init:
 	move.l	#18+VAR.LEN,d1  ; length
 	moveq	#$18,d0		;  MT.ALCHP
 	trap	#1		; allocate space
-
 	tst.l	d0
 	bne	ROM_EXIT 	; exit if error
 	move.l	a0,a3           ; base of linkage block
-	moveq	#0,d0
-	trap	#1
-	cmpi.l	#'1.60',d2	; check QDOS version
-	blo	initerr		; must be Minerva
-	cmpi.l	#'2.00',d2	; not SMSQ/E...
-	bhs	initerr
-	move.l	sv_chtop(a0),a4	; base of extended sysvars
-	lea	$b0(a4),a0	; linkage block of MDV driver         
-	moveq	#$23,d0		; MT.RDD
-	trap	#1		; unlink MDV driver
 
 ; --------------------------------------------------------------
 ;  set ASCII table and clear actual key.
@@ -285,37 +312,37 @@ no_intr lea     RDKEYB(pc),a1   ; real address
 	lea	sx_ipcom(a4),a1	; pointer to MT.IPCOM front-end list
 	move.w	$d2,a2		; UT.LINK
 	jsr	(a2)		; link in routine
-	bra.s	ROM_EXIT
 
         GENIF BOOTDEV <> 0
 	bsr.s	boot_init       ; 'future enhancement...'
-	bra.s	ROM_EXIT
         ENDGEN
-
-initerr	suba.l	a0,a0
-        lea	inerrms,a1
-	move.w	$d0,a2
-	jsr	(a2)		; print error message
 
 ROM_EXIT:
 	movem.l	(a7)+,initreg
+        tst.l   d0
 	rts
 
-inerrms	string$	{'Incompatible QDOS Version!',10}
-intmsg  string$ {'* Using keyboard interrupt *',10}
+inerrms	string$	{'- Incompatible QDOS Version or other init error',10}
+intmsg  string$ {'- Using keyboard interrupt',10}
 
 	ds.w	0
         
 ************************************
 * Procedure and function definitions
 
-procs   dc.w    2               ; two procedures
+procs   dc.w    3               ; three procedures
         dc.w    kbtable-*
         dc.b    7,'KBTABLE'
         dc.w    disp_mode-*
         dc.b    9,'DISP_MODE'
+        dc.w    slug-*
+        dc.b    4,'SLUG'
         dc.w    0               ; end of procs
-        dc.w    6               ; no of functions
+        dc.w    9               ; no of functions (+ overflow from long names)
+        dc.w    processor-*
+        dc.b    9,'PROCESSOR'
+        dc.w    machine-*
+        dc.b    7,'MACHINE'
         dc.w    scr_base-*
         dc.b    8,'SCR_BASE'
         dc.w    scr_llen-*
@@ -329,6 +356,25 @@ procs   dc.w    2               ; two procedures
         dc.w    alfm-*
         dc.b    4,'ALFM'
         dc.w    0               ; end of functions
+        
+processor
+        move.w  #sys_ptyp,d4
+        bra.s   get_sv
+machine
+        move.w  #sys_mtyp,d4
+get_sv  
+        moveq   #2,d1
+        move.w  bv.chrix,a2
+        jsr     (a2)            ; check room for 2(!) bytes
+        moveq   #mt.inf,d0
+        trap    #1
+        move.l  bv_rip(a6),a1
+        subq.l  #2,a1
+        clr.w   (a6,a1.l)
+        move.b  (a0,d4.w),1(a6,a1.l) ; get system variable
+        move.l  a1,bv_rip(a6)   ; set stack
+        moveq   #3,d4           ; integer result
+        rts                     ; return (D0 already zero)
 
 * subroutine to get address of linkage block from BASIC
 * Entry: none
@@ -389,6 +435,19 @@ kb_set:
 kb_exit rts
 
 kb_bp   moveq   #err.bp,d0
+        rts
+
+* SLUG command (0 = fast, 255 = slowest)
+
+slug:
+        move.w  ca.gtint,a2
+        jsr     (a2)
+        bne     kb_exit
+        subq.w  #1,d3
+        bne     kb_bp
+        move.b  1(a6,a1.l),q68_slug
+        addq.l  #2,bv_rip(a6)
+        moveq   #0,d0
         rts
 
 *****************************************************
@@ -729,7 +788,7 @@ L01_KTAB_CT:
  DC.B 0,3,24,4,5,148,147,0,0,32,22,6,20,18,149,0
  DC.B 0,14,2,8,7,25,150,0,0,0,13,10,21,151,152,0
  DC.B 0,140,11,9,15,144,153,0,0,142,143,12,155,16,141,0
- DC.B 0,0,135,0,187,157,0,0,226,0,0,189,0,131,0,0
+ DC.B 0,0,135,0,187,157,0,0,226,0,10,189,0,131,0,0
  DC.B 0,188,0,0,0,0,0,0,0,206,0,194,198,0,0,0
  DC.B 0,202,218,0,202,210,128,0,0,139,222,141,138,214,0,0
  DC.B 0,0,0,239
@@ -751,7 +810,7 @@ L01_KTAB_SC:
  DC.B 0,163,184,164,165,132,0,0,0,32,182,166,180,178,133,0
  DC.B 0,174,162,168,167,185,190,0,0,0,173,170,181,134,138,0
  DC.B 0,156,171,169,175,137,136,0,0,158,159,172,154,176,191,0
- DC.B 0,0,160,0,27,139,0,0,230,0,0,29,0,30,0,0
+ DC.B 0,0,160,0,27,139,0,0,230,0,254,29,0,30,0,0
  DC.B 0,28,0,0,0,0,0,0,0,145,0,148,151,0,0,0
  DC.B 144,142,146,149,150,152,31,0,0,139,147,141,138,153,0,0
  DC.B 0,0,0,0
@@ -825,7 +884,7 @@ L44_KTAB_CT:
  DC.B 0,3,24,4,5,148,147,0,0,32,22,6,20,18,149,0
  DC.B 0,14,2,8,7,25,150,0,0,0,13,10,21,151,152,0
  DC.B 0,140,11,9,15,144,153,0,0,142,143,12,155,16,141,0
- DC.B 0,0,135,0,187,157,0,0,226,0,0,189,0,131,0,0
+ DC.B 0,0,135,0,187,157,0,0,226,0,10,189,0,131,0,0
  DC.B 0,188,0,0,0,0,0,0,0,206,0,194,198,0,0,0
  DC.B 0,202,218,0,202,210,128,0,0,139,222,141,138,214,0,0
  DC.B 0,0,0,239
@@ -847,7 +906,7 @@ L44_KTAB_SC:
  DC.B 0,163,184,164,165,132,0,0,0,32,182,166,180,178,133,0
  DC.B 0,174,162,168,167,185,190,0,0,0,173,170,181,134,138,0
  DC.B 0,156,171,169,175,137,136,0,0,158,159,172,154,176,191,0
- DC.B 0,0,160,0,27,139,0,0,230,0,0,29,0,30,0,0
+ DC.B 0,0,160,0,27,139,0,0,230,0,254,29,0,30,0,0
  DC.B 0,28,0,0,0,0,0,0,0,145,0,148,151,0,0,0
  DC.B 144,142,146,149,150,152,31,0,0,139,147,141,138,153,0,0
  DC.B 0,0,0,0
@@ -922,7 +981,7 @@ L49_KTAB_CT:
  DC.B 0,3,24,4,5,148,147,0,0,32,22,6,20,18,149,0
  DC.B 0,14,2,8,7,26,150,0,0,0,13,10,21,151,152,0
  DC.B 0,140,11,9,15,144,153,0,0,142,141,12,0,16,141,0
- DC.B 0,0,0,0,0,157,0,0,226,0,0,139,0,131,0,0
+ DC.B 0,0,0,0,0,157,0,0,226,0,10,139,0,131,0,0
  DC.B 0,156,0,0,0,0,0,0,0,206,0,194,198,0,0,0
  DC.B 0,202,218,0,202,210,128,0,0,139,222,141,138,214,0,0
  DC.B 0,0,0,239
@@ -944,7 +1003,7 @@ L49_KTAB_SC:
  DC.B 0,163,184,164,165,132,0,0,0,32,96,166,180,178,133,0
  DC.B 0,174,162,168,167,186,190,0,0,0,173,170,181,134,138,0
  DC.B 0,155,171,169,175,137,136,0,0,154,191,172,0,176,191,0
- DC.B 0,0,0,0,0,139,0,0,230,0,0,138,0,135,0,0
+ DC.B 0,0,0,0,0,139,0,0,230,0,254,138,0,135,0,0
  DC.B 0,158,0,0,0,0,0,0,0,145,0,148,151,0,0,0
  DC.B 144,142,146,149,150,152,31,0,0,139,147,141,138,153,0,0
  DC.B 0,0,0,0
@@ -974,18 +1033,20 @@ L49_KTAB_GR:
 ;  Handle key event - response to a keyboard interrupt
 ;  called from polled list or external interrupt list
 
-rkeyreg REG	d3/a3-a4	; not really needed, but just in case...
+rkeyreg REG	d3/d5/a3-a4	; not really needed, but just in case...
 
 RDKEYX: moveq   #0,d3           ; external interrupt entry;
                                 ; signal 'no polls missed'
 RDKEYB:                         ; polled interrupt entry
+        move.l	SV_KEYQ(a6),a2  ; current keyboard queue (or 0)
+RDKEYI:                         ; entry used from IPC KEYROW emulator
 	movem.l	rkeyreg,-(a7)
 
 ; read keyboard
 
-	move.l	SV_KEYQ(a6),d0	; current keyboard queue
-	beq	RDKEYBR		; if no queue
-	move.l	d0,a2		; A2 holds queue address
+
+;	beq	RDKEYBR		; if no queue
+;	move.l	d0,a2		; A2 holds queue address
 	btst.b	#0,KEY_STATUS	; key pressed?
 	beq.s	RDKEYBX		; no, exit but do key repeat proc first
 kbl	move.b	KEY_CODE,d0	; get scan code
@@ -1043,7 +1104,7 @@ RKDSPEC	exg	d1,d2		; special: display $80+code & LF
 
 RDKEYBdn:
 	tst.l	d0		; -2: special, 0: normal, 2: ignore
-	bne.s	RDKEYBin	; if special or invalid code
+	bgt.s	RDKEYBin	; if invalid code
 	bsr	KR_ENTR		; enter key into key-down-list
 
 ; handle normal or special codes; call ip.kbrd vector which calls Q68kbenc
@@ -1051,6 +1112,8 @@ RDKEYBdn:
 
 RDKEYBin:
 	move.l	VAR.CTLflg(a3),VAR.ARbuf(a3) ; set ARbuf to scancode+SH/CT/ALT
+        move.l  a2,d2           ; check if keyboard queue present
+        beq.s   RDKEYBXL        ; oops...
 	move.l	a3,-(a7)	; save A3 b/c ip.kbrd smashes it!
 	move.w	$150,a0		; ip.kbrd
 	jsr	$4000(a0)
@@ -1061,6 +1124,8 @@ RDKEYBXL:
 	bne	kbl		; (can happen?)
 
 RDKEYBX:
+        move.l  a2,d0           ; do we have a keyboard queue?
+        beq.s   RDKEYBR         ; no, exit!
 	tst.b	VAR.ARbuf+3(a3)	; key still held down?
 	sne	d5		; if yes, set D5
 ; NOTE: only bit 3 significant (not bit 4 as Minerva doc says!)
@@ -1589,6 +1654,20 @@ KR_IPCem:
 	cmpi.b	#1,d7		; sanity check; parameter count should be 1
 	bne.s	KR_IPCrt	; just to be on the safe side...
 	addq.l	#2,(a7)		; okay, we'll do it so take second return addr
+
+; the following code added in case interrupts are disabled (as with many games)
+; note that on entry interrupts are disabled anyway so we cannot simply test SR
+
+        moveq   #7,d0
+        and.b   4(a7),d0        ; test interrupt bits saved on stack
+        beq.s   KR_IPC2         ; interrupts enabled - no need to scan keyboard
+        movem.l d2-d4/a0-a3,-(a7) ; save these registers
+        moveq   #0,d3           ; no polls missed
+        suba.l  a2,a2           ; no input queue!
+        lea     -VAR.IPClnk(a0),a3 ; set A3 right for keyboard decoder
+        bsr     RDKEYI          ; call keyboard read routine
+        movem.l (a7)+,d2-d4/a0-a3
+KR_IPC2:
 	moveq	#7,d0
 	and.b	(a3),d0		; D0 now holds keyrow number
 	move.b	VAR.KEYraw-VAR.IPClnk(a0,d0.w),d1 ; get KEYROW byte

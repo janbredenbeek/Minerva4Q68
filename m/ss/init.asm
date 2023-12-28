@@ -125,16 +125,18 @@ s.intr  equ     pc.intre!pc.intrf!pc.intrt!pc.intri!pc.intrg clear interrupts
       ENDGEN * Q68 = 0 *
         
       GENIF Q68 <> 0          ; Q68 hardware initialisation (from SMSQ/E)
-        
-;	st	led			; LED on
-	sf	q68_ethi		; block CP2200 interrupts v. 1.03
-        sf      uart_status             ; disable serial interrupts
-        sf      mouse_status            ; disable PS/2 mouse interrupts
-	clr.b	kbd_unlock		; no key may be got
-	st	pc_intr     		; pc_intr; NOT CLEAR?????
-	clr.b	pc_tctrl                ; clear transmit control reg
 
-	move.l	#q68_sramb+4,q68_sramb	; first free space in fast sram mem
+        lea     q68_sramt,a3
+;       st      led-q68_sramt(a3);      LED on
+        sf      q68_reset-q68_sramt(a3) ; reset Q68 hardware
+        sf      q68_ethi-q68_sramt(a3)  ; block CP2200 interrupts v. 1.03
+        and.b   #$1f,uart_status-q68_sramt(a3) ; disable serial interrupts
+        and.b   #$7f,mouse_status-q68_sramt(a3) ; disable PS/2 mouse interrupts
+	clr.b	kbd_unlock-q68_sramt(a3) ; no key may be got
+	st      pc_intr-q68_sramt(a3)   ; pc_intr; NOT CLEAR?????
+	clr.b	pc_tctrl-q68_sramt(a3)  ; clear transmit control reg
+
+        move.l  #q68_sramb+4,q68_sramb-q68_sramt(a3) ; first free space in fast sram mem
       
       ENDGEN * Q68 <> 0 * 
         

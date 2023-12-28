@@ -12,6 +12,8 @@
         include 'm_inc_ser'
         include 'm_inc_sv'
         include 'm_inc_sx'
+        include 'm_mincf'
+        include 'm_inc_q68'
 
 * Notes by lwr:
 * This has all been shuffled about quite a bit, in an attempt to get toward
@@ -120,18 +122,23 @@ alloc
 set_parms
         assert  ser_chno,ser_par-2,ser_txhs-4,ser_prot-6
         movem.w d4-d7,ser_chno(a0) put them all
+
         moveq   #ops1_cmd-1-32,d1
 
 * Tell the IPC what's going on
 do_com
         assert  ops1_cmd,ops2_cmd-1
         assert  cls1_cmd,cls2_cmd-1
+        
+        GENIF   QL_IPC <> 0
         add.w   ser_chno(a0),d1
         move.l  a0,a2           save channel base
         move.l  d6,d2           just for close, adhere to rule: d6 preserved
         jsr     ip_adcmd(pc)    do ipc command
         move.l  d2,d6
         move.l  a2,a0           restore channel base
+        ENDGEN
+        
         moveq   #0,d0           set return code
 popsr
         move    (sp)+,sr        n.b. rte is no good on a 68020, etc
@@ -146,7 +153,7 @@ close
         bmi.s   cl_czok         nope - no ctrl/z needed
 cl_czlp
         moveq   #'z'&31,d1      we need to put ctrl/z onto the queue
-        bsr.s   sbyte           try to put out the ctrl/z
+        bsr     sbyte           try to put out the ctrl/z
         addq.l  #-err.nc,d0     is it not complete?
         beq.s   cl_czlp         hopefully, we will eventually get there!
 
@@ -169,6 +176,7 @@ cl_czok
         tas     ser_txq+q_eoff(a0) ok, so we know how to set end of file!
 *        lea     ser_txq(a0),a2  set end of file
 *        jsr     io_qeof(pc)     mark queue as end of file
+        
         moveq   #cls1_cmd-1-32,d1
         bra.s   do_com
 
@@ -307,6 +315,8 @@ tx_par
         add.b   d2,d2           move parity bit into x
         roxr.b  #1,d1           put it into the byte
 tx_pok
-        jmp     io_qin(pc)      stuff byte into queue
+        jsr     io_qin(pc)      stuff byte into queue
+
+        rts
 
         end

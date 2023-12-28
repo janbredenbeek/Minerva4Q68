@@ -1,6 +1,7 @@
 * Inter-integrated circuit (IIC or I squared C) bus driver
         include 'm_inc_err'
         include 'm_inc_vect4000'
+        include 'm_mincf'
 
 * Timing requirements for the I2C bus:
 
@@ -214,6 +215,8 @@
 * break up the, so far, pure uniformity of bit access rate.
 
         section ii_drive
+
+        GENIF   QL_IIC <> 0
 
 * Front end for somewhat less destructive access. Preserves d3-d6, a0/a2/a4-a5.
 drv_end
@@ -463,5 +466,7 @@ verok
         jmp     (a0)            return ok
 
         vect4000 ii_drive,ii_raw
+
+        ENDGEN
 
         end

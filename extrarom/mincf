@@ -29,6 +29,9 @@ CPU		equ	0
 * High resolution (1024x768) for Q68 (DISP_MODE 4, EXPERIMENTAL)
 Q68_HIRES       equ     1
 
+* 16-bit colour (mode 33) for Q68
+Q68_M33         equ     1
+
 SDEBUG equ 	0
 
  ENDGEN
