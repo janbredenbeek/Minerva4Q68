@@ -8,6 +8,9 @@
 ; 
 ; Changelog:
 ;
+; 20231231 JB (v1.61, release)
+;   Register A0 now properly preserved on initialisation; avoid issues with F1/F2 startup prompt
+;
 ; 20231228 JB (v1.6, release)
 ;   KEYROW emulation via MT.IPCOM front-end now scans keyboard when interrupts
 ;   are disabled, so should work with games now. Note that it still depends on
@@ -61,7 +64,7 @@
         xref    disp_mode,scr_base,scr_llen,scr_xlim,scr_ylim
         xref    free_fmem,alfm,ser_init,rom_end
 
-version	setstr	1.6
+version	setstr	1.61
 
 DEBUG	equ	0		; set to 1 to display variables and result code
 
@@ -118,6 +121,7 @@ romh:
         ds.w     0
 
 rom_init 
+        movem.l a0/a3,-(sp)     ; save these registers
         moveq	#0,d0
 	trap	#1
 	cmpi.l	#'1.60',d2	; check QDOS version
@@ -134,16 +138,16 @@ rom_init
         bne.s   initerr
         jsr     ser_init
         bne.s   initerr
+
         GENIF   Q68_M33 <> 0
         jsr     q68scr_init       ; initialise screen driver
         ENDGEN
         
-        move.l  a3,-(sp)          ; save ROM pointer
         lea     rom_end(pc),a3    ; end of our code
         cmpi.l  #$4afb0001,(a3)   ; is there another extension ROM after us?
         bne.s   bye               ; no, exit
+        move.l  (sp),a0           ; get original A0
         lea     8(a3),a1          ; ROM name
-        suba.l  a0,a0
         move.w  ut.mtext,a2       ; print it
         jsr     (a2)
         move.w  4(a3),d0          ; S*Basic procs?
@@ -156,13 +160,14 @@ in_nobas
         beq.s    bye               ; no
         jsr      (a3,d0.w)         ; else, call it
 bye     
-        move.l   (sp)+,a3          ; restore ROM pointer
+        movem.l  (sp)+,a0/a3       ; restore registers
         rts
 
 initerr	suba.l	a0,a0
         lea	inerrms,a1
-	move.w	$d0,a2
-	jmp	(a2)		; print error message
+	move.w	ut.mtext,a2
+	jsr	(a2)		; print error message
+        bra     bye
 
 ****** q68 PS2 keyboard interface ********
 

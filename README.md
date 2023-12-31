@@ -162,6 +162,8 @@ Contributors:
 Version history:
 ----------------
 
+- 31 December 2023: v1.61 released
+  - Register A0 now properly preserved on initialisation; avoid issues with F1/F2 startup prompt
 - 28 December 2023: v1.6 released. 
   - Added serial port support (see above)
   - Q68 hardware is now properly reset when loading using LRESPR
