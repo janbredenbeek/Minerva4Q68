@@ -8,8 +8,13 @@
 ; 
 ; Changelog:
 ;
+; 20240101 JB (v1.62, release)
+;   Enter supervisor mode + interrupts off when probing hardware for keyboard
+;   interrupt and linking in interrupt routines
+;
 ; 20231231 JB (v1.61, release)
-;   Register A0 now properly preserved on initialisation; avoid issues with F1/F2 startup prompt
+;   Register A0 now properly preserved on initialisation; avoid issues with 
+;   F1/F2 startup prompt
 ;
 ; 20231228 JB (v1.6, release)
 ;   KEYROW emulation via MT.IPCOM front-end now scans keyboard when interrupts
@@ -64,7 +69,7 @@
         xref    disp_mode,scr_base,scr_llen,scr_xlim,scr_ylim
         xref    free_fmem,alfm,ser_init,rom_end
 
-version	setstr	1.61
+version	setstr	1.62
 
 DEBUG	equ	0		; set to 1 to display variables and result code
 
@@ -122,7 +127,7 @@ romh:
 
 rom_init 
         movem.l a0/a3,-(sp)     ; save these registers
-        moveq	#0,d0
+        moveq   #mt.inf,d0
 	trap	#1
 	cmpi.l	#'1.60',d2	; check QDOS version
 	blo.s	initerr		; must be Minerva
@@ -132,7 +137,7 @@ rom_init
         move.b  #SYS_MACHINE,sys_mtyp(a0)
 	move.l	sv_chtop(a0),a4	; base of extended sysvars
 	lea	$b0(a4),a0	; linkage block of MDV driver         
-	moveq	#$23,d0		; MT.RDD
+        moveq   #mt.rdd,d0
 	trap	#1		; unlink MDV driver
         bsr.s   q68kbd_init       ; initialise keyboard
         bne.s   initerr
@@ -156,11 +161,11 @@ rom_init
         move.w  bp.init,a2        ; else, link them in
         jsr     (a2)
 in_nobas
-        move.w   6(a3),d0          ; init routine?
-        beq.s    bye               ; no
-        jsr      (a3,d0.w)         ; else, call it
+        move.w  6(a3),d0          ; init routine?
+        beq.s   bye               ; no
+        jsr     (a3,d0.w)         ; else, call it
 bye     
-        movem.l  (sp)+,a0/a3       ; restore registers
+        movem.l (sp)+,a0/a3       ; restore registers
         rts
 
 initerr	suba.l	a0,a0
@@ -232,7 +237,7 @@ vdwak	equ	VAR.KEYdwa-VAR.KEYdwk
 ;	+ KEY_decode: press/relse, modifier and weird keys
 * /home/rz/qdos/qdos-classic/QZ-net/CLSC/SRC/ISA/804Xd_asm - keytable-de
 
-initreg	reg	d1-d3/a0-a4
+initreg	reg	d1-d3/d7/a0-a4
 
 q68kbd_init:
 
@@ -243,7 +248,7 @@ q68kbd_init:
 
 ;* VAR.LEN should be enough
 	move.l	#18+VAR.LEN,d1  ; length
-	moveq	#$18,d0		;  MT.ALCHP
+        moveq   #mt.alchp,d0
 	trap	#1		; allocate space
 	tst.l	d0
 	bne	ROM_EXIT 	; exit if error
@@ -274,12 +279,16 @@ init_2:
 ;;	lea	VAR.ACTkey(a3),a0
 ;;	clr.w	(a0)+		; clear keycodes
 
+        move.w  sr,d7           ; save SR
+        trap    #0              ; better do the following in supervisor mode
+        ori.w   #$700,sr        ; ... with no interrupts
+
 ; ----------------------------------------------------------------
 ; disable the Minerva polled task for reading the IPC, since there
 ; is no IPC in the Q68
 
 	lea	sx_poll(a4),a0	; link to polled task
-	moveq	#$1d,d0		; MT.RPOLL
+        moveq   #mt.rpoll,d0
 	trap	#1
 
 ; replace the ROM keyboard decode routine in sx_kbenc with our own
@@ -287,7 +296,7 @@ init_2:
 	lea	Q68kbenc(pc),a0
 	move.l	a0,sx_kbenc(a4)
 ; --------------------------------------------------------------
-;  link in polled task routine to handle keyboard
+;  link in interrupt routines to handle keyboard
 
 ;;	lea	POLL_SERver(pc),a1 ; redundant code, use real address
       	st      kbd_status              ; try  to use interrupts for keyboard
@@ -298,25 +307,26 @@ init_2:
         lea     RDKEYX(pc),a1           ; address of external interrupt handler
         lea     SV_LXINT(a3),a0
         move.l  a1,4(a0)
-        moveq   #$1a,d0                 ; MT.LXINT
+        moveq   #mt.lxint,d0
         trap    #1
         st      kbd_status              ; show that we use interrupts
-        st      kbd_unlock              ; keyboard may start up
         suba.l  a0,a0
-        lea     intmsg,a1               ; EXPERIMENTAL
-        move.w  $d0,a2                  ; UT_MTEXT
+        lea     intmsg,a1               ; say that we use keyboard interrupt
+        move.w  ut.mtext,a2
         jsr     (a2)
 no_intr lea     RDKEYB(pc),a1   ; real address
 	lea	SV_LPOLL(a3),a0
 	move.l	a1,4(a0) 	; address of polled task
-	moveq	#$1c,d0		;  MT.LPOLL
+        moveq   #mt.lpoll,d0
 	trap	#1
 	lea	VAR.IPClnk(a3),a0 ; address of IPC front-end linked list
 	lea	KR_ipcem(pc),a1	; address of IPC keyrow emulation routine
 	move.l	a1,4(a0)	; set pointer to routine
 	lea	sx_ipcom(a4),a1	; pointer to MT.IPCOM front-end list
-	move.w	$d2,a2		; UT.LINK
+	move.w	ut.link,a2	; UT.LINK
 	jsr	(a2)		; link in routine
+        st      kbd_unlock      ; keyboard may start up
+        move.w  d7,sr           ; restore interrupts + user mode
 
         GENIF BOOTDEV <> 0
 	bsr.s	boot_init       ; 'future enhancement...'

@@ -41,7 +41,7 @@ LRUN the program first (this will set some variables right and display the usage
 The mincf configuration file
 ----------------------------
 
-This text file in the M_ subdirectory is used to configure certain hardware features of Minerva while building. It's currently configured for the Q68, further details are not ducumented yet so it's best to leave it alone...
+This text file in the M_ subdirectory is used to configure certain hardware features of Minerva while building. It's currently configured for the Q68, further details are not documented yet so it's best to leave it alone...
 
 INSTALLATION:
 -------------
@@ -162,6 +162,8 @@ Contributors:
 Version history:
 ----------------
 
+- 01 January 2024: v1.62 released
+  - Enter supervisor + interrupts off when probing hardware for keyboard interrupt and linking in interrupt routines
 - 31 December 2023: v1.61 released
   - Register A0 now properly preserved on initialisation; avoid issues with F1/F2 startup prompt
 - 28 December 2023: v1.6 released. 
