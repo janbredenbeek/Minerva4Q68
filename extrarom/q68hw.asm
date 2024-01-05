@@ -69,7 +69,7 @@
         xref    disp_mode,scr_base,scr_llen,scr_xlim,scr_ylim
         xref    free_fmem,alfm,ser_init,rom_end
 
-version	setstr	1.62
+version	setstr	1.63
 
 DEBUG	equ	0		; set to 1 to display variables and result code
 

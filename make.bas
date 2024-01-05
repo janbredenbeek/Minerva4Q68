@@ -60,11 +60,11 @@
 690 :
 700 DEFine PROCedure make_clean
 710 LOCal d$,fnr,fnm$
-720 logchan=FOP_OVER("ram1_make_log"): IF logchan < 0 THEN REPORT#0;logchan: STOP
+720   logchan=FOP_OVER("ram1_make_log"): IF logchan < 0 THEN REPORT#0;logchan: RETurn
 730   RESTORE
 740   REPeat loop
 750     IF EOF THEN EXIT loop
-760     READ d$: d$=Min4Q68_dev$ & "m_" & d$ & "_"
+760     READ d$: d$=Min4Q68_dev$ & d$ & "_"
 770     dirch=FOP_DIR(d$): IF dirch < 0 THEN PRINT#0;"Error opening ";d$: REPORT#0;dirch: RETurn
 780     fnr=-1
 790     REPeat file_lp
@@ -99,5 +99,6 @@
 1080   PRINT\"** ERROR: Source directory missing; have you set Min4Q68_dev$ correctly?"
 1090 END IF
 1100 IF FTEST(PROGD$ & "QMake") <> 0: PRINT\"** ERROR: QMake not found in your PROGD$ (";PROGD$;")!"
-1110 DATA "bf","bp","bv","ca","cn","cs","dd","gw","ib","ii","io","ip","md"
-1120 DATA "mm","mt","nd","od","pa","pf","q68","ri","sb","sd","ss","tb","ut"
+1110 DATA "m_bf","m_bp","m_bv","m_ca","m_cn","m_cs","m_dd","m_gw","m_ib","m_ii","m_io","m_ip","m_md"
+1120 DATA "m_mm","m_mt","m_nd","m_od","m_pa","m_pf","m_q68","m_ri","m_sb","m_sd","m_ss","m_tb","m_ut"
+1130 DATA "extrarom"

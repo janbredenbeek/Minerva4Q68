@@ -78,12 +78,20 @@ regoff  reg     d0-d3/a1-a2     (d0 just to discard space for colour masks)
 curset
         move.w  d0,d1           split into two registers
         swap    d0
+        
+        GENIF   Q68_M33 <> 0
         btst    #sx..m33,sx_dmod(a2) ; a2 has been set by cs_plain
         lea     cs_over(pc),a2
         beq.s   curprint
         move.l  cs.over16,a2
 curprint
         jsr     (a2)
+        ENDGEN
+        
+        GENIF   Q68_M33 = 0
+        jsr     cs_over(pc)
+        ENDGEN
+        
         movem.l (sp)+,regoff
         neg.b   (sp)
 

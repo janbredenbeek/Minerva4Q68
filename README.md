@@ -162,6 +162,8 @@ Contributors:
 Version history:
 ----------------
 
+- 05 January 2024: v1.63 released
+  - fixed bug in SD_FILL trap (BLOCK command) which would crash in DISP_MODE 4
 - 01 January 2024: v1.62 released
   - Enter supervisor + interrupts off when probing hardware for keyboard interrupt and linking in interrupt routines
 - 31 December 2023: v1.61 released

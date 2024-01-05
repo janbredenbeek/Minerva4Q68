@@ -25,7 +25,7 @@
 sd_fill
         GENIF   Q68_M33 <> 0
         move.l  sv_chtop(a6),a2
-        btst    #1<<sx..m33,sx_dmod(a2) ; MODE 33?
+        btst    #sx..m33,sx_dmod(a2)    ; MODE 33?
         beq.s   sd_fill2                ; no, use QL mode
         move.l  cs.fill16,a3            ; get vector to 16-bit fill
         btst    #sd..xor,sd_cattr(a0)
