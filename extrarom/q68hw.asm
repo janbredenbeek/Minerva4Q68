@@ -8,6 +8,13 @@
 ; 
 ; Changelog:
 ;
+; 20240108 JB (v1.64, interim)
+;   Don't read keyboard from polled interrupt when using external interrupt
+;   (only do key repeat)
+;
+; 20240106 JB (v1.63, release)
+;   Fixes in Minerva code, only version bumped.
+;
 ; 20240101 JB (v1.62, release)
 ;   Enter supervisor mode + interrupts off when probing hardware for keyboard
 ;   interrupt and linking in interrupt routines
@@ -69,7 +76,7 @@
         xref    disp_mode,scr_base,scr_llen,scr_xlim,scr_ylim
         xref    free_fmem,alfm,ser_init,rom_end
 
-version	setstr	1.63
+version	setstr	1.63.1
 
 DEBUG	equ	0		; set to 1 to display variables and result code
 
@@ -1054,14 +1061,21 @@ RDKEYX: moveq   #0,d3           ; external interrupt entry;
                                 ; signal 'no polls missed'
 RDKEYB:                         ; polled interrupt entry
         move.l	SV_KEYQ(a6),a2  ; current keyboard queue (or 0)
-RDKEYI:                         ; entry used from IPC KEYROW emulator
-	movem.l	rkeyreg,-(a7)
 
+RDKEYI:                         ; used by IPC KEYROW emulator (d3 = a2 = 0)
+	movem.l	rkeyreg,-(a7)
+        
+; 20240108 JB: don't read keyboard from polled interrupt if using extint
+; (experimental, cannot test this myself)
+
+        tst.l   sv_axint(a3)    ; are we using external interrupts?
+        beq.s   RDKEYS          ; no, go ahead
+        tst.b   d3              ; ... and called from polled interrupt?
+        bne.s   RDKEYBX         ; then skip, but do key repeat proc
+        
 ; read keyboard
 
-
-;	beq	RDKEYBR		; if no queue
-;	move.l	d0,a2		; A2 holds queue address
+RDKEYS:
 	btst.b	#0,KEY_STATUS	; key pressed?
 	beq.s	RDKEYBX		; no, exit but do key repeat proc first
 kbl	move.b	KEY_CODE,d0	; get scan code
