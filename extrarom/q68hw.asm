@@ -8,7 +8,14 @@
 ; 
 ; Changelog:
 ;
-; 20240108 JB (v1.64, interim)
+; 20240204 JB (v1.64, release)
+;   Fixes in Minerva code, only version bumped.
+;
+; 20240128 JB (v1.63.2, interim)
+;   Implemented proper Q68 reset using magic word in CALL 390
+;   Reverted Q68 mode 33 test in sd_entry if not configured in mincf
+;
+; 20240108 JB (v1.63.1, interim)
 ;   Don't read keyboard from polled interrupt when using external interrupt
 ;   (only do key repeat)
 ;
@@ -76,7 +83,7 @@
         xref    disp_mode,scr_base,scr_llen,scr_xlim,scr_ylim
         xref    free_fmem,alfm,ser_init,rom_end
 
-version	setstr	1.63.1
+version	setstr	1.64
 
 DEBUG	equ	0		; set to 1 to display variables and result code
 
@@ -89,6 +96,7 @@ DEBUG	equ	0		; set to 1 to display variables and result code
         include m_inc_sx
         include m_inc_bv
         include m_inc_err
+        include m_inc_io
         include m_inc_mt
         include m_inc_vect
         include m_inc_q68
@@ -154,11 +162,11 @@ rom_init
         GENIF   Q68_M33 <> 0
         jsr     q68scr_init       ; initialise screen driver
         ENDGEN
-        
+
+        move.l  (sp),a0           ; channel ID (should be 0)        
         lea     rom_end(pc),a3    ; end of our code
         cmpi.l  #$4afb0001,(a3)   ; is there another extension ROM after us?
         bne.s   bye               ; no, exit
-        move.l  (sp),a0           ; get original A0
         lea     8(a3),a1          ; ROM name
         move.w  ut.mtext,a2       ; print it
         jsr     (a2)

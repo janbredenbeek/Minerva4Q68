@@ -56,8 +56,15 @@ branch
         swap    d0
         move.b  sd_cattr(a0),d3 set attributes
 
-        movem.l sd_font(a0),a2/a3 ... font
+        movem.l sd_font(a0),a2/a3 ... font        
         pea     sd_ncol(pc)     move to next column on return
+        
+        GENIF   Q68_M33 = 0
+        lea     sd_smask(a0),a1 set colours
+        jmp     cs_char(pc)     go do the character
+        ENDGEN
+        
+        GENIF   Q68_M33 <> 0
         move.l  sv_chtop(a6),a1
         btst    #sx..m33,sx_dmod(a1) ; are we doing MODE 33?
         lea     cs_char(pc),a1       ; assume no
@@ -66,8 +73,8 @@ branch
 ql_mode 
         move.l  a1,-(sp)        ; push address of handler
         lea     sd_smask(a0),a1 set colours
-;        jmp     cs_char(pc)     go do the character
         rts                     ; and go!
+        ENDGEN
 
 * Rest of the code for other sd entries
 

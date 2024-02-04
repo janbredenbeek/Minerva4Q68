@@ -1,7 +1,7 @@
 * Startup program for basic
         include 'm_mincf'
         include 'm_inc_q68'
-        
+
         xdef    sb_start
 
         xref    bp_alvv,bp_chnew,bp_chnid,bp_init
@@ -276,14 +276,38 @@ go_key
         moveq   #$40000>>16,d1  start getting 128k mask ready
         bset    d1,d3           flag byte now: dual/0/0/f1-f4/TV/128k/ROM/quick
         and.b   d3,d1           isolate 128k bit
+
+        GENIF   Q68 <> 0        ; for Q68, limit RAMTOP to 16MB
+        bne.s   set_mem         ; skip if 128K requested
+        ori.w   #$100,d1        ; this is 16MB >> 16
+        ENDGEN
+set_mem
         swap    d1              put it up in msw, now $40000 if 128k requested
         move.b  d3,d1           d1.l now ready for re-reset call
         move.l  (sp),d3         get top of stack
         move.l  d1,(sp)         replace top of stack
         eor.b   d1,d3           check which bits differ
         and.b   #%10000110,d3   do dualscreen, 128k and romscan bits agree?
-set_mde1
+set_mde1        
         beq.s   set_mode        yes - we're happy to leave that as it is
+
+; Q68: Wait until user has released the F1-F4 key before rebooting
+; This avoids spurious keys to be registered caused by reinitialisation of the
+; keyboard driver (e.g. pressing shift-F1 for 128K and releasing after the
+; reboot causes the code of F1 to be inserted into the queue, followed by
+; another reboot as if F1 was pressed!
+
+        GENIF   Q68 <> 0
+        move.l  d1,-(sp)        ; save reboot flags
+        lea     kr_cmd,a3       ; read keyrow 0
+kr_loop
+        moveq   #mt.ipcom,d0
+        trap    #1
+        tst.b   d1              ; check if all keys F1-F4 released
+        bne     kr_loop         ; loop back if not
+        move.l  (sp)+,d1        ; restore flags
+        ENDGEN
+        
         jmp     390             no - go to magic reset location with d1.l set
 
 get_mode
@@ -416,6 +440,10 @@ err_mov
 chnid
         move.w  d4,d1
         jmp     bp_chnid(pc)    select next channel
+
+        GENIF   Q68 <> 0
+kr_cmd  dc.b    9,1,0,0,0,0,0,2 ; IPC command for reading keyrow 0
+        ENDGEN
 
 * Three sets of three window definitions: initial, monitor and TV
 

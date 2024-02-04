@@ -128,7 +128,6 @@ s.intr  equ     pc.intre!pc.intrf!pc.intrt!pc.intri!pc.intrg clear interrupts
 
         lea     q68_sramt,a3
 ;       st      led-q68_sramt(a3);      LED on
-        sf      q68_reset-q68_sramt(a3) ; reset Q68 hardware
         sf      q68_ethi-q68_sramt(a3)  ; block CP2200 interrupts v. 1.03
         and.b   #$1f,uart_status-q68_sramt(a3) ; disable serial interrupts
         and.b   #$7f,mouse_status-q68_sramt(a3) ; disable PS/2 mouse interrupts

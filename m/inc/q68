@@ -105,6 +105,7 @@ q68_card2	equ	$c		; card init item in config block
 q68_slug	equ	$1c028		; hardware slug 0 (no slug) to 255 (max)
 					; (nb 0-5 are the same)
 q68_reset	equ	$1c024
+q68.reset       equ     $BAD0           ; word to write into q68_reset
 q68_ethi	equ	$1c040		; Ethernet interrupt ON switch
 q68_timer	equ	$1c060
 q68_1sec	equ	40000000	; 40 Mhz timer

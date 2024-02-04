@@ -146,7 +146,7 @@ ctlt1
 
 soft
         GENIF   q68 <> 0
-        move.l  #Q68_RAMT*1024+9,d1 ; for Q68 limit RAM test
+        move.l  #Q68_RAMT*1024+1,d1 ; for Q68 limit RAM test
         ENDGEN
 
         GENIF   q68 = 0

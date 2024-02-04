@@ -25,7 +25,7 @@ Q68_KEY		equ	0	* PS2 keyboard
 Q68_SKEY 	equ	0	* use serial line as keyboard
 Q68_SER         equ     1       * use Q68 serial port
 * CPU 0: test it, 1: fixed to 68000
-CPU		equ	0	
+CPU		equ	1	
 SYS_MACHINE     equ     18
 
 * High resolution (1024x768) for Q68 (DISP_MODE 4, EXPERIMENTAL)

@@ -145,7 +145,8 @@ Commands available are:
 Current issues:
 ---------------
 
-- The maximum amount of RAM supported is limited to 16MB, as the slave block system's structure currently prevents supporting more RAM. If you can do with less, I even recommend to cut RAM to a lower value using CALL 390,<RAMTOP value in bytes> to limit the size of the slave block table and speed up file access (see Minerva manual for more CALL 390 boot-time options).
+- The maximum amount of RAM supported is limited to 16MB, as the slave block system's structure currently prevents supporting more RAM. If you can do with less, I even recommend to cut RAM to a lower value using CALL 390,<RAMTOP value in bytes> to limit the size of the slave block table and speed up file access (see Minerva manual for more CALL 390 boot-time options). 
+- Note that you can still use RAM above 16MB for loading extension ROM images since Minerva scans areas above RAMTOP for the 'magic number' $4AFB0001 in 16K increments. E.g. you can load a ROM image of Toolkit II using LBYTES tk2_rom,16777216 and reboot Minerva using CTRL-ALT-SHIFT-TAB (or CALL 390,16777317), which links in the extension ROMs.
 - The SD-card driver requires a CARD_INIT 2 command to use the SD card in slot 2; other SD-card related commands are presently not implemented.
 - The QLNET and Ethernet interfaces are supported using external utilities, see https://dilwyn.qlforum.co.uk/q68/index.html for more information.
 - Some users of Q68 boards with newer firmware (v1.05) have reported problems with the keyboard and the Q68 'freezing' after the F1/F2 prompt. These are currently under investigation. Please use the Issues section to report any problems, stating as much information as possible (including the firmware version, which can be read from the Q68's initial boot screen; temporary removal of the SD card will give you enough time to read it).
@@ -162,6 +163,10 @@ Contributors:
 Version history:
 ----------------
 
+- 04 February 2024: v1.64 released
+  - Implemented proper Q68 reset using magic word in CALL 390
+  - Reverted Q68 mode 33 test in sd_entry if not configured in mincf
+  - Fix: Choosing 128K (shift-F1/F2) and/or dual screen (F3/F4) on boot caused incorrect RAMTOP of 28MB, leading to crashes.
 - 05 January 2024: v1.63 released
   - fixed bug in SD_FILL trap (BLOCK command) which would crash in DISP_MODE 4
 - 01 January 2024: v1.62 released

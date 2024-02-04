@@ -112,7 +112,7 @@ ser_init
         moveq   #mt.alchp,d0
         trap    #1
         tst.l   d0
-        bne.s   init_end
+        bne     init_end
         lea     ser_xint,a1
         move.l  a1,sv_axint(a0)
         lea     ser_schd,a1
@@ -142,6 +142,12 @@ ser_init
         addq.l  #sv_lio-sv_lschd,a0
         moveq   #mt.liod,d0
         trap    #1
+        moveq   #mt.inf,d0
+        trap    #1
+        move.l  sv_chtop(a0),a0
+        lea     sx_serb(a0),a0
+        moveq   #mt.riod,d0
+        trap    #1                      ; remove old SER driver link
         lea     procs,a1
         move.w  bp.init,a2
         jsr     (a2)
