@@ -1,12 +1,33 @@
-; ************************************
-; q68 hardware drivers for Minerva ROM
-; ************************************
-; Based on Q40/Q60/Q68 code by Richard Zidlicky
-;
-; Modifications for Q68 by Jan Bredenbeek
-; Use and distribution governed by GNU Public License v3
+* ************************************
+* q68 hardware drivers for Minerva ROM
+* ************************************
+* Based on Q40/Q60/Q68 code by Richard Zidlicky
+*
+* Modifications for Q68 by Jan Bredenbeek
+*
+* Copyright (C) 2018-2024 Jan Bredenbeek
+* 
+* This program is free software: you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation, either version 3 of the License, or
+* (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ; 
 ; Changelog:
+;
+; 20240224 JB (v1.65, release)
+;   Removed external interrupt handler for keyboard. HOTKEY system didn't work
+;   with it because it uses a polled task to monitor the keyboard queue. This
+;   task should be called after the task that scans the keyboard, without any
+;   intervening tasks or jobs that may use keyboard input. This can only be
+;   guaranteed when using a polled task for keyboard scan.
 ;
 ; 20240204 JB (v1.64, release)
 ;   Fixes in Minerva code, only version bumped.
@@ -83,7 +104,7 @@
         xref    disp_mode,scr_base,scr_llen,scr_xlim,scr_ylim
         xref    free_fmem,alfm,ser_init,rom_end
 
-version	setstr	1.64
+version	setstr	1.65
 
 DEBUG	equ	0		; set to 1 to display variables and result code
 
@@ -115,21 +136,21 @@ string$	macro	a
 
 BOOTDEV equ     0
 
-; This is the start of the extension ROM header.
-; Since our code is only a few K and the system ROM scans for extension ROMs
-; in increments of 16K, we would waste a lot of of space which could be
-; occupied by another extension ROM. Also, Wolfgangs's SD-card driver is about
-; 20K in length, wasting 12K of valuable ROM space. By combining our code with
-; the SD-card driver, we can free up 16K in the $14000-$17FFF area, thus
-; allowing for another extension ROM to be included in the 96K ROM image.
-; For example, Toolkit II can now be included in the ROM image and doesn't have
-; to be loaded from the BOOT file.
-; Another scenario for extension ROMs which insist on placement in the $C000
-; area is to include these right after the system ROM image, before the
-; keyboard and SD-driver ROM.
-; After doing our own initialisation, we now look for a ROM header following
-; our code. If there is one, we do the usual initialisation that the system
-; ROM does.
+* This is the start of the extension ROM header.
+* Since our code is only a few K and the system ROM scans for extension ROMs
+* in increments of 16K, we would waste a lot of of space which could be
+* occupied by another extension ROM. Also, Wolfgangs's SD-card driver is about
+* 20K in length, wasting 12K of valuable ROM space. By combining our code with
+* the SD-card driver, we can free up 16K in the $14000-$17FFF area, thus
+* allowing for another extension ROM to be included in the 96K ROM image.
+* For example, Toolkit II can now be included in the ROM image and doesn't have
+* to be loaded from the BOOT file.
+* Another scenario for extension ROMs which insist on placement in the $C000
+* area is to include these right after the system ROM image, before the
+* keyboard and SD-driver ROM.
+* After doing our own initialisation, we now look for a ROM header following
+* our code. If there is one, we do the usual initialisation that the system
+* ROM does.
 
 	section q68_q68hw
         
@@ -266,7 +287,7 @@ q68kbd_init:
         moveq   #mt.alchp,d0
 	trap	#1		; allocate space
 	tst.l	d0
-	bne	ROM_EXIT 	; exit if error
+	bne.s   ROM_EXIT 	; exit if error
 	move.l	a0,a3           ; base of linkage block
 
 ; --------------------------------------------------------------
@@ -310,25 +331,28 @@ init_2:
 
 	lea	Q68kbenc(pc),a0
 	move.l	a0,sx_kbenc(a4)
-; --------------------------------------------------------------
+
+* --------------------------------------------------------------
+* External interrupt code for reading the keyboard removed.
+* The HOTKEY system didn't work with it!
 ;  link in interrupt routines to handle keyboard
 
 ;;	lea	POLL_SERver(pc),a1 ; redundant code, use real address
-      	st      kbd_status              ; try  to use interrupts for keyboard
-        move.b  kbd_status,d0           ; can I use interrupts for keyboard?
+;      	st      kbd_status              ; try  to use interrupts for keyboard
+;        move.b  kbd_status,d0           ; can I use interrupts for keyboard?
 ;;      btst    #7,d0
 ;;      beq.s   no_intr
-        bpl.s   no_intr                 ;   ... no
-        lea     RDKEYX(pc),a1           ; address of external interrupt handler
-        lea     SV_LXINT(a3),a0
-        move.l  a1,4(a0)
-        moveq   #mt.lxint,d0
-        trap    #1
-        st      kbd_status              ; show that we use interrupts
-        suba.l  a0,a0
-        lea     intmsg,a1               ; say that we use keyboard interrupt
-        move.w  ut.mtext,a2
-        jsr     (a2)
+;        bpl.s   no_intr                 ;   ... no
+;        lea     RDKEYX(pc),a1           ; address of external interrupt handler
+;        lea     SV_LXINT(a3),a0
+;        move.l  a1,4(a0)
+;        moveq   #mt.lxint,d0
+;        trap    #1
+;        st      kbd_status              ; show that we use interrupts
+;        suba.l  a0,a0
+;        lea     intmsg,a1               ; say that we use keyboard interrupt
+;        move.w  ut.mtext,a2
+;        jsr     (a2)
 no_intr lea     RDKEYB(pc),a1   ; real address
 	lea	SV_LPOLL(a3),a0
 	move.l	a1,4(a0) 	; address of polled task
@@ -353,7 +377,7 @@ ROM_EXIT:
 	rts
 
 inerrms	string$	{'- Incompatible QDOS Version or other init error',10}
-intmsg  string$ {'- Using keyboard interrupt',10}
+; intmsg  string$ {'- Using keyboard interrupt',10}
 
 	ds.w	0
         
@@ -597,11 +621,11 @@ boot_buf
 *****************************************************
 
 
-; ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-; Conversion tables for translating ASCII to KEYROW
-;
-; The organization is (in ASCII order):
-;  CTRL(bit7) SHFT(bit6) ROWnumber(bits5-3) COLnumber(bits2-0)
+* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+* Conversion tables for translating ASCII to KEYROW
+
+* The organization is (in ASCII order):
+* CTRL(bit7) SHFT(bit6) ROWnumber(bits5-3) COLnumber(bits2-0)
 
 QLRAWKEY:
  dc.b 149,164,148,147,166,180,156,158   ; 00-07
@@ -652,11 +676,10 @@ QLRAWEND:
 AWKCOD	EQU	74		; awkward key that doesn't fit
 AWKASC	EQU	'/'		; into scheme if NUMLOCK is on
 
-;*******************************************************************
-;*
-;*  Subroutine to decode raw keyboard value
-; Entry: D0 scan code from keyboard (PC-style)
-; Exit: none, sets CTL/SHF/ALT flags and VAR.ACTkey to scancode
+*******************************************************************
+* Subroutine to decode raw keyboard value
+* Entry: D0 scan code from keyboard (PC-style)
+* Exit: none, sets CTL/SHF/ALT flags and VAR.ACTkey to scancode
 
 KEY_decode:
 
@@ -1059,14 +1082,14 @@ L49_KTAB_GR:
 
 ******************************************************************
 
-; --------------------------------------------------------------
-;  Handle key event - response to a keyboard interrupt
-;  called from polled list or external interrupt list
+* --------------------------------------------------------------
+*  Handle key event - response to a keyboard interrupt
+*  called from polled list
 
 rkeyreg REG	d3/d5/a3-a4	; not really needed, but just in case...
 
-RDKEYX: moveq   #0,d3           ; external interrupt entry;
-                                ; signal 'no polls missed'
+;RDKEYX: moveq   #0,d3           ; external interrupt entry;
+;                                ; signal 'no polls missed'
 RDKEYB:                         ; polled interrupt entry
         move.l	SV_KEYQ(a6),a2  ; current keyboard queue (or 0)
 
@@ -1074,12 +1097,12 @@ RDKEYI:                         ; used by IPC KEYROW emulator (d3 = a2 = 0)
 	movem.l	rkeyreg,-(a7)
         
 ; 20240108 JB: don't read keyboard from polled interrupt if using extint
-; (experimental, cannot test this myself)
+; (removed, see comments below q68kbd_init)
 
-        tst.l   sv_axint(a3)    ; are we using external interrupts?
-        beq.s   RDKEYS          ; no, go ahead
-        tst.b   d3              ; ... and called from polled interrupt?
-        bne.s   RDKEYBX         ; then skip, but do key repeat proc
+;        tst.l   sv_axint(a3)    ; are we using external interrupts?
+;        beq.s   RDKEYS          ; no, go ahead
+;        tst.b   d3              ; ... and called from polled interrupt?
+;        bne.s   RDKEYBX         ; then skip, but do key repeat proc
         
 ; read keyboard
 
@@ -1310,12 +1333,12 @@ isprog
 
         ENDGEN
 	
-; --------------------------------------------------------------
-; convert key-stroke to ASCII or 'special' code
-
-; Entry: VAR.ACTkey and CTL/SHF/ALT flags set
-; Exit : D0.L: -2 special code, 0 normal code, +2 ignore code
-;	 D1.W: ASCII code or special code
+* --------------------------------------------------------------
+* convert key-stroke to ASCII or 'special' code
+*
+* Entry: VAR.ACTkey and CTL/SHF/ALT flags set
+* Exit : D0.L: -2 special code, 0 normal code, +2 ignore code
+*	 D1.W: ASCII code or special code
 
 KEY_conv:
 ;;	movem.l	d0/a0,-(a7)	; redundant
@@ -1464,20 +1487,20 @@ KEY_convX:
 ;;	movem.l	(a7)+,d0/a0 redundant
 	rts
 
-; -----------------------------------------------------------------------------
-; The 'keyboard encode' routine is called from ip.kbenc vector via the sx.kbenc
-; pointer. On a standard QL, this does most of the conversion from 'raw' key
-; codes to ASCII. However, we have already done this in the KEY_conv routine
-; above. What remains to be done is taking different returns according to the
-; result of the conversion:
-; - Direct return: take special action (BREAK, CTRL-TAB, CTRL-ENTER, etc)
-; - Return addr+2: normal ASCII code
-; - Return addr+4: invalid scan code or 'compose' key, ignore this
-;
-; Since D0 has already been set up by KEY_conv to hold -2, 0 or +2 respectively
-; in these cases, the remaining code will be quite straightforward. We do have
-; to check though for CAPS LOCK and CTRL-F5, which perform special functions 
-; but do have valid ASCII codes (which KEYROW emulation depends on).
+* -----------------------------------------------------------------------------
+* The 'keyboard encode' routine is called from ip.kbenc vector via the sx.kbenc
+* pointer. On a standard QL, this does most of the conversion from 'raw' key
+* codes to ASCII. However, we have already done this in the KEY_conv routine
+* above. What remains to be done is taking different returns according to the
+* result of the conversion:
+* - Direct return: take special action (BREAK, CTRL-TAB, CTRL-ENTER, etc)
+* - Return addr+2: normal ASCII code
+* - Return addr+4: invalid scan code or 'compose' key, ignore this
+*
+* Since D0 has already been set up by KEY_conv to hold -2, 0 or +2 respectively
+* in these cases, the remaining code will be quite straightforward. We do have
+* to check though for CAPS LOCK and CTRL-F5, which perform special functions 
+* but do have valid ASCII codes (which KEYROW emulation depends on).
 
 Q68kbenc:
 	tst.l	d0		; valid ASCII code?
@@ -1674,16 +1697,16 @@ KR_DXIT:
 ;;POLL_EXIT:
 ;;	rts
 
-; -------------------------------------------------------------------
-; IPC keyboard direct read command emulation
-; This uses the MT.IPCOM front-end linked list feature in Minerva
-; Entry: D0.B IPC command (we only process type 9)
-;	 D5.L parameter length (ignored, we only use bits 0-3)
-;	 D7.B parameter count (should be 1)
-;	 A0.L pointer to link (in our case VAR.IPClnk)
-;	 A3.L pointer to parameter (KEYROW argument)
-; Exit:	 D1.B return code (KEYROW bits)
-;	 Returns at return address +2 if valid command, else direct return.
+* -------------------------------------------------------------------
+* IPC keyboard direct read command emulation
+* This uses the MT.IPCOM front-end linked list feature in Minerva
+* Entry: D0.B IPC command (we only process type 9)
+*	 D5.L parameter length (ignored, we only use bits 0-3)
+*	 D7.B parameter count (should be 1)
+*	 A0.L pointer to link (in our case VAR.IPClnk)
+*	 A3.L pointer to parameter (KEYROW argument)
+* Exit:	 D1.B return code (KEYROW bits)
+*	 Returns at return address +2 if valid command, else direct return.
 
 KR_IPCem:
 	cmpi.b	#9,d0		; IPC KEYROW command?

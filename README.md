@@ -162,7 +162,8 @@ Contributors:
 
 Version history:
 ----------------
-
+- 25 February 2024: v1.65 released
+  - Removed external interrupt handler for keyboard. The HOTKEY system didn't work with it because it uses a polled task to monitor the keyboard queue. This task should be called after the task that scans the keyboard, without any intervening tasks or jobs that may use keyboard input. This can only be guaranteed when using a polled task for keyboard scan.
 - 04 February 2024: v1.64 released
   - Implemented proper Q68 reset using magic word in CALL 390
   - Reverted Q68 mode 33 test in sd_entry if not configured in mincf

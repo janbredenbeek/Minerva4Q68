@@ -131,9 +131,9 @@ s.intr  equ     pc.intre!pc.intrf!pc.intrt!pc.intri!pc.intrg clear interrupts
         sf      q68_ethi-q68_sramt(a3)  ; block CP2200 interrupts v. 1.03
         and.b   #$1f,uart_status-q68_sramt(a3) ; disable serial interrupts
         and.b   #$7f,mouse_status-q68_sramt(a3) ; disable PS/2 mouse interrupts
-	clr.b	kbd_unlock-q68_sramt(a3) ; no key may be got
-	st      pc_intr-q68_sramt(a3)   ; pc_intr; NOT CLEAR?????
-	clr.b	pc_tctrl-q68_sramt(a3)  ; clear transmit control reg
+	sf      kbd_unlock-q68_sramt(a3) ; no key may be got
+        move.b  #$1f,pc_intr-q68_sramt(a3) ; no xmit/intf/gap interrupts
+        sf      pc_tctrl-q68_sramt(a3)  ; clear transmit control reg
 
         move.l  #q68_sramb+4,q68_sramb-q68_sramt(a3) ; first free space in fast sram mem
       
