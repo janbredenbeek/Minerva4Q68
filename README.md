@@ -8,6 +8,8 @@ A port of the Minerva operating system for the Q68 (Sinclair QL clone).
 
 The Minerva operating system was originally designed as a replacement ROM operating system for the Sinclair QL computer, currently licenced under GPLv3. This port is aimed at the Q68, an FPGA-based replacement board for the QL. It is not intended as a replacement for the SMSQ/E OS supplied with the Q68, as SMSQ/E is far more extensive and better suited to support the Q68 hardware than the 48K ROM-based Minerva. We just provide this port to demonstrate the Q68's ability to run 'oldskool' ROM images, give Q68 users the Minerva look and feel, and maybe provide an opportunity to run badly written software that doesn't run on SMSQ/E (but chances are big that this software won't run on Minerva either).
 
+In the following text, 'Q68' also includes recent Q68-compatible hardware developments. This Minerva release has been successfully tested with QIMSI Gold and Qzero. 
+
 The current Minerva build is based on v1.98, with a few modifications to run successfully on the Q68.
 
 BUILDING:
@@ -123,7 +125,7 @@ From v1.6 onwards, the Q68's serial port is supported using a new driver in the 
 - Configurable port name; default SER1 but can be changed using the SER_USE command
 - Alternative port names for transmit- and receive-only channels (STXx/SRXx), for use with SERnet
 - Baud rate configurable from 1200 to 230400 bits per second (using normal BAUD command)
-- Flow control using XON/XOFF protocol with optional data transparency (between two Q68s or Q68 and QIMSI)
+- Flow control using XON/XOFF protocol with optional data transparency (between two Q68s or Q68-compatibles)
 - Configurable transmit- and receive buffers using SER_BUFF command
 
 The Q68's serial port is much faster than the original QL's SER ports, but unfortunately lacks CTS/RTS lines so all flow control has to be done in software using XON/XOFF handshake. The original QDOS/Minerva driver has only fixed-size buffers of 81 bytes, which is not adequate for handling high speeds. SMSQ/E, by contrast, has buffers of configurable size, and by default uses dynamic-size transmit buffers which can grow to insane size (probably designed to send files in quick succession to a printer). Unfortunately, all current versions of SMSQ/E do not support the XON/XOFF protocol even though the driver accepts 'X' as option on channel opens or as parameter to the SER_FLOW command, so sending or receiving files from or to the Q68 at full speeds will more or less lead to data corruption. 
@@ -136,7 +138,7 @@ Commands available are:
 - SER_FLOW takes a one-letter parameter *I*, *H*, or *X*, where
   - *I*: stands for no flow-control (i.e. send at full speed, ignore XON/XOFFs sent by the remote)
   - *X*: use XON/XOFF flow control when sending and receiving. This is not transparent to the data; if your data contains either of these characters (11H and 13H) this will disrupt transfers. Only use it when sending plain text data.
-  - *H*: Use XON/XOFF flow control but escape these characters in the data stream (using DLE, so XON will be sent as 10H followed by 'Q' and XOFF as 10H followed by 'S'). Using this technique, full 8-bit data transfers will be possible whilst still providing flow control (equivalent to using the *H* option with DTR/CTS handshake on the original QL's SER ports). This is an implementation-specific extension to the protocol and will only work between two Q68s using the SER driver, or a QIMSI serial port using SER4.
+  - *H*: Use XON/XOFF flow control but escape these characters in the data stream (using DLE, so XON will be sent as 10H followed by 'Q' and XOFF as 10H followed by 'S'). Using this technique, full 8-bit data transfers will be possible whilst still providing flow control (equivalent to using the *H* option with DTR/CTS handshake on the original QL's SER ports). This is an implementation-specific extension to the protocol and will currently only work between two Q68s or compatibles using the SER driver.
   - Note that these options may also be specified when opening a channel to the port; e.g. OPEN#3,ser1x will open the serial port and use XON/XOFF flow control.
 - SER_BUFF *txbuffer*,*rxbuffer* sets the size of the transmit buffer and (optionally) the receive buffer. This allows you to configure the transmit and receive buffers, like SMSQ/E's SER_BUFF command. Its behaviour is somewhat different in that the default sizes are 16384 bytes for the receive buffer and 1024 bytes for the transmit buffer, and that dynamic-sized transmit buffers are not possible (they will usually fail when flow control has to be asserted, e.g. with Zmodem transfers).
 - SER_ROOM *threshold* sets the receive buffer's threshold for asserting flow control. When the receive buffer has been filled up to the point where there are less than *threshold* bytes free, a XOFF is sent to the remote. This threshold is also affected by SER_BUFF, which sets it to 1/4th of the receive buffer size. When the receive buffer has been emptied for 75 percent of its size, a XON character will be sent to the remote.
