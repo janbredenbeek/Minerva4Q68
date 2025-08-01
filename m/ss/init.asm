@@ -306,6 +306,22 @@ clrbas
         trap    #1
     ENDGEN
 
+; The following code courtesy of Mark Swift
+; On the 68020+, the RTE at ss_rj0 (see reshd.asm) would remove an additional
+; word from the stack (format word), leading to stack underflow and possible
+; corruption of the first entry of the slave block table
+
+        dc.l	$48e70001	movem.l a7,-(a7)
+        cmpa.l	(a7)+,a7
+        beq.s	jump_start	branch if < 68020
+        
+        moveq	#0,d1
+        dc.w	$4E7B,$1002	movec d1,cacr
+        dc.w	$4E7B,$1801	movec d1,vbr
+        
+        move.w	d1,-(a7)	push a dummy format/vector word
+	
+jump_start
         jmp     ss_rj0(pc)      this will start up basic
 
         end

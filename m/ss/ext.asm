@@ -4,6 +4,8 @@
         xref    mm_rechp
         xref    tb_f0,tb_f1,tb_itrn,tb_kbenc,tb_otrn,tb_msg,tb_trn
 
+        include m_mincf
+
         section ss_ext
 
 ss_ext          ;               user routine to call on shift/ctrl/alt/enter
@@ -35,6 +37,7 @@ ss_ext          ;               user routine to call on shift/ctrl/alt/enter
         ;       caps lock       shift/ctrl/enter        caps lock
 
         dc.w    '1.98',4,'JSL1'
-*       dc.w    0,0,0           reserved
+        dc.w    VERS_SUB
+*       dc.w    0,0             reserved
 
         end

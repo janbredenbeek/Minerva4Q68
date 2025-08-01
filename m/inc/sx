@@ -41,8 +41,8 @@ sx_kbste ds.b   12      special key remap table
 
 sx_qdos ds.l    1       returned by mt.inf, ver$(-2)
 sx_basic ds.w   1+4/2   length prefixed string returned by ver$, ver$(0)
-
-        ds.w    2       spare/reserved
+sx_subvs ds.w   1       sub version
+        ds.w    1       spare/reserved
         ds.b    1       21kxs10w   21: ser21 data pend, k: key held, x: shift
                         ; change while key held, s: sound in progress, 1: 1,
                         ; 0: zero Hermes, old IPC showed ser being zapped,

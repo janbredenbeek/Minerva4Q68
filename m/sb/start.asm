@@ -140,6 +140,21 @@ samech
         tst.w   d1              have we opened channel #1 yet?
         beq.s   samech          no - let it repeat the same id as #0
 nochans
+        GENIF   CMD_HIST <> 0   ; if HISTORY enabled
+        moveq   #-1,d1
+        moveq   #0,d3
+        lea     his_name(pc),a0 ; HISTORY name
+        moveq   #io.open,d0
+        trap    #2              ; try opening HISTORY channel
+        tst.l   d0              ; succeeded
+        bne.s   no_hist
+        move.l  a0,bv_hichn(a6) ; store channel ID
+no_hist
+        ENDGEN
+
+; Note: The above code is only executed for daughter BASIC interpreters
+; The HISTORY channel for the main BASIC is opened by the HISTORY init code
+; which is executed either from extrarom init or by LRESPRing from job 0
 
 * Build CMD$ as an initial variable
 
@@ -396,6 +411,7 @@ ini_disp
         assert  0,mt.inf
 *       moveq   #mt.inf,d0
         trap    #1
+        move.w  #VERS_SUB,-(sp) ; store sub-version
         move.l  d2,-(sp)        store qdos version number
         move.l  #10<<24!10<<16!'  ',-(sp) nl,nl,sp,sp
 
@@ -409,7 +425,7 @@ ini_disp
         ENDGEN
         
         move.l  sp,a1
-        sub.w   #2+34-8,sp
+        sub.w   #2+36-10,sp
         sub.l   a6,a1
         jsr     cn_date(pc)
         addq.l  #2,a1
@@ -417,13 +433,13 @@ ini_disp
         moveq   #10,d3
         move.b  d3,7(sp)
         move.b  d3,19(sp)
-        move.l  #34<<16!'K ',(sp)
+        move.l  #36<<16!'K ',(sp)
 * We now have, word prefixed, "K day\yyyy mmm dd\hh:mm:ss\\  vern"
         moveq   #2,d4
         bsr.s   chnid
         moveq   #err.bt,d0      put boot message in #2, redefine then select #1
         bsr.s   err_mov
-        move.l  2+34+4(sp),d1
+        move.l  2+36+4(sp),d1
         lsl.l   #16-10,d1
         swap    d1
         sub.w   #128,d1         don't count ROM, etc
@@ -469,6 +485,8 @@ ini_def
 wdef_len equ (tv_def-mon_def)/3
 
 cmds    dc.w    4,'CMD$'
+
+his_name dc.w   12,'HISTORY_2048'
 
         vect4000 sb_start
 

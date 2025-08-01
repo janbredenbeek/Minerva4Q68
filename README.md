@@ -18,8 +18,8 @@ BUILDING:
 The complete ROM image and drivers are ready-built, see INSTALLATION below for instructions how to install it. However, if you want to rebuild Minerva and/or the extrarom drivers, you will need the following:
 
 - a QDOS or (preferrably) SMSQ/E system on suitable hardware. A bare QL with 128K RAM and floppies won't do, you will need several megabytes of storage to assemble and link the system together. The Q68 itself has enough storage but you will need some patience. Use QPC2 or another emulator if you want more speed.
-- The QMAC and QLINK macro-assembler and linker. You can download them from https://dilwyn.qlforum.co.uk/asm/index.html. These are enhanced versions of the GST Macro Assembler and linker, now freeware for non-commercial purposes.
-- The QMake program, also available from the download link mentioned above. This program requires the Pointer Environment (already included in SMSQ/E) and the QMenu extension (https://dilwyn.qlforum.co.uk/tk/qmenu805.zip) installed.
+- The QMAC and QLINK macro-assembler and linker. You can download them from https://dilwyn.theqlforum.com/asm/index.html. These are enhanced versions of the GST Macro Assembler and linker, now freeware for non-commercial purposes. As an alternative for QLINK, you may also use the Qjump linker from SMSQ/E's source.
+- The QMake program, also available from the download link mentioned above. This program requires the Pointer Environment (already included in SMSQ/E) and the QMenu extension (https://dilwyn.theqlforum.com/tk/qmenu805.zip) installed.
 - The Make.bas SBASIC program in this repository for easy building.
 
 You might need to do some configuration on the QMAC, QLINK, and QMake programs using the menuconfig program to get the device and directory path right. The original build used 'win1_' as base device for the whole repository, which was hardcoded in all .asm and cct files. I have stripped the base device from all 'include' directives in the .asm files, which should simplify building on any platform provided that you set the default data directory (DATA_USE statement) correctly.
@@ -43,12 +43,12 @@ LRUN the program first (this will set some variables right and display the usage
 The mincf configuration file
 ----------------------------
 
-This text file in the M_ subdirectory is used to configure certain hardware features of Minerva while building. It's currently configured for the Q68, further details are not documented yet so it's best to leave it alone...
+This text file in the M_ subdirectory is used to configure certain hardware features of Minerva while building. It's currently configured for the Q68, but may be changed to build a generic Minerva ROM by setting the variable realQL to 1 and q68 to 0. After editing this file, you MUST rebuild the entire Minerva ROM by issueing a 'make_clean'.
 
 INSTALLATION:
 -------------
 
-The Q68_ROM.SYS file should copied to the root directory of a FAT32-formatted SDHC card. The Q68 will then load this image and boot into the Minerva operating system.
+The Q68_ROM.SYS file should be copied to the root directory of a FAT32-formatted SDHC card. The Q68 will then load this image and boot into the Minerva operating system.
 
 The 80K ROM images contain the Minerva operating system, a keyboard driver for US, UK and DE (German) keyboard layouts, and a SDHC card driver. Note that in the current build the MDV driver is still present but disabled since there is no MDV hardware in the Q68.
 
@@ -79,7 +79,7 @@ SBYTES Min4Q68_rext,base,size
 CONFIGURATION:
 --------------
 
-The devices win1_ to win8_ and qub1_ to qub8_ can be configured to be mapped to any \*.WIN (QLWA format) or \*.BIN (Qubide format) container file by using the CONFIG or MENUCONFIG program on the Q68_ROM.SYS file. You MUST use a V2 capable version of these programs. Suitable CONFIG programs can be found on https://dilwyn.qlforum.co.uk/config/index.html.
+The devices win1_ to win8_ and qub1_ to qub8_ can be configured to be mapped to any \*.WIN (QLWA format) or \*.BIN (Qubide format) container file by using the CONFIG or MENUCONFIG program on the Q68_ROM.SYS file. You MUST use a V2 capable version of these programs. Suitable CONFIG programs can be found on https://dilwyn.theqlforum.com/config/index.html.
 
 HIGH RESOLUTION MODE 1024x768x4
 -------------------------------
@@ -130,7 +130,7 @@ From v1.6 onwards, the Q68's serial port is supported using a new driver in the 
 
 The Q68's serial port is much faster than the original QL's SER ports, but unfortunately lacks CTS/RTS lines so all flow control has to be done in software using XON/XOFF handshake. The original QDOS/Minerva driver has only fixed-size buffers of 81 bytes, which is not adequate for handling high speeds. SMSQ/E, by contrast, has buffers of configurable size, and by default uses dynamic-size transmit buffers which can grow to insane size (probably designed to send files in quick succession to a printer). Unfortunately, all current versions of SMSQ/E do not support the XON/XOFF protocol even though the driver accepts 'X' as option on channel opens or as parameter to the SER_FLOW command, so sending or receiving files from or to the Q68 at full speeds will more or less lead to data corruption. 
 
-Reliable transfers are possible using SERnet (https://dilwyn.qlforum.co.uk/tk/sernet.zip; please use v2.25 as v3 will not work with Minerva). When using default buffer size, it is not necessary to enable XON/XOFF flow control, so specifying SRX1I/STX1I as device name will be sufficient. Using SERnet, I was able to achieve througputs up to 8.5K bytes at 115200 bps, which is twice as fast as the original QLAN network.
+Reliable transfers are possible using SERnet (https://dilwyn.theqlforum.com/tk/sernet.zip; please use v2.25 as v3 will not work with Minerva). When using default buffer size, it is not necessary to enable XON/XOFF flow control, so specifying SRX1I/STX1I as device name will be sufficient. Using SERnet, I was able to achieve througputs up to 8.5K bytes at 115200 bps, which is twice as fast as the original QLAN network.
 
 Commands available are:
 
@@ -150,7 +150,7 @@ Current issues:
 - The maximum amount of RAM supported is limited to 16MB, as the slave block system's structure currently prevents supporting more RAM. If you can do with less, I even recommend to cut RAM to a lower value using CALL 390,<RAMTOP value in bytes> to limit the size of the slave block table and speed up file access (see Minerva manual for more CALL 390 boot-time options). 
 - Note that you can still use RAM above 16MB for loading extension ROM images since Minerva scans areas above RAMTOP for the 'magic number' $4AFB0001 in 16K increments. E.g. you can load a ROM image of Toolkit II using LBYTES tk2_rom,16777216 and reboot Minerva using CTRL-ALT-SHIFT-TAB (or CALL 390,16777217), which links in the extension ROMs.
 - The SD-card driver requires a CARD_INIT 2 command to use the SD card in slot 2; other SD-card related commands are presently not implemented.
-- The QLNET and Ethernet interfaces are supported using external utilities, see https://dilwyn.qlforum.co.uk/q68/index.html for more information.
+- The QLNET and Ethernet interfaces are supported using external utilities, see https://dilwyn.theqlforum.com/q68/index.html for more information.
 - Some users of Q68 boards with newer firmware (v1.05) have reported problems with the keyboard and the Q68 'freezing' after the F1/F2 prompt. These are currently under investigation. Please use the Issues section to report any problems, stating as much information as possible (including the firmware version, which can be read from the Q68's initial boot screen; temporary removal of the SD card will give you enough time to read it).
 
 Contributors:
@@ -159,11 +159,18 @@ Contributors:
 - Minerva operating system by Laurence Reeves;
 - Keyboard driver: Richard Zidlicky, Jan Bredenbeek
 - Mouse driver: Peter Graf
-- SDHC device driver: Peter Graf, Wolfgang Lenerz
+- SDHC device driver: Peter Graf, Wolfgang Lenerz, Marcel Kilgus
 - Serial driver: Jan Bredenbeek
+- HISTORY device: Marcel Kilgus, backported from SMSQ/E by Jan Bredenbeek
 
 Version history:
 ----------------
+- 01 August 2025: v1.70 released
+  - Added command history using HISTORY device! You can now use the arrow up/down keys to browse through the command history, just like in SMSQ/E. Also, the HISTORY device has been backported from SMSQ/E so it's now also available in Minerva. Note that you can still use the AUTO command as before to enter auto-numbered lines and browse through them, in case you don't have the much more advanced Toolkit II's ED full-screen editor available.
+  - Since the new command history feature might also be of interest for Minerva users on non-Q68 platforms, a standalone 48K ROM image is now also available for use in emulators  or even real QL hardware. This doesn't incorporate the HISTORY device, which has to be LRESPR'ed separately for command history to work. Also, the I2C support for Minerva MKII has been removed to make room for the command history code.
+  - To distinguish this Minerva build from other builds, a new subversion has been added. I'm following the convention introduced by Marcel Kilgus. VER$(-2) and MT.INF still return "1.98" for compatibility reasons, but the subversion may be read from the previously unused extended system variable at offset $4A (i.e. PEEK_W(!124!74)). The new subversion will be 'j1' for the standalone build and 'q1' for the Q68 build. (Note that this system variable has actually 4 bytes, so the extra 2 bytes at $4C may be used in the future if I might run out of single digits!)
+  - Fixed a bug in the startup code which caused the Supervisor Stack Pointer to have an incorrect value on 68020+ processors (not applicable to Q68 platforms).
+  - Updated outdated links in this README file
 - 25 February 2024: v1.65 released
   - Removed external interrupt handler for keyboard. The HOTKEY system didn't work with it because it uses a polled task to monitor the keyboard queue. This task should be called after the task that scans the keyboard, without any intervening tasks or jobs that may use keyboard input. This can only be guaranteed when using a polled task for keyboard scan.
 - 04 February 2024: v1.64 released

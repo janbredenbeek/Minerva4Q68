@@ -1,8 +1,12 @@
 filetype 0
+
+program extrarom_bin
+
 input extrarom_q68hw_rel
 input extrarom_fastmem_rel
 input extrarom_q68scr_rel
+;input extrarom_char16_rel
+;input extrarom_area16_rel
 input extrarom_q68ser_rel
-; input extrarom_char16_rel
-; input extrarom_area16_rel
+input hist_init_rel
 input extrarom_romend_rel

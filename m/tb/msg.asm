@@ -54,7 +54,8 @@ tb_msg
         msg     {' F1/F2 sets monitor/TV'},lf \
                 {' F3/F4 for dual screen'},lf \
                 {' 128K+SHIFT  dumb+CTRL'}
-        msg     {'  The QView Mega Corporation!'}
+;       msg     {'  The QView Mega Corporation!'}
+        msg     {' The QView Mega Corporation'}
         msg     {'during WHEN processing'},lf
         msg     {'PROC/FN cleared'},lf
         msg.b   {'SunMonTueWedThuFriSat'}

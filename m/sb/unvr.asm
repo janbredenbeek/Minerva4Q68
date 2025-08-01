@@ -8,9 +8,13 @@
         xref    pa_graph,pa_mist,pa_strip,pa_table
         xref    pf_nwlin
 
+        include 'm_mincf'
         include 'm_inc_assert'
         include 'm_inc_bv'
         include 'm_inc_err'
+        include 'm_inc_fs'
+        include 'm_inc_io'
+        include 'm_inc_sd'
 
 c.defcn equ     0       default console channel
 
@@ -65,10 +69,11 @@ universe
         move.w  bv_edinc(a6),d0 read the increment
         sne     bv_auto(a6)     if it's zero then turn edit off again
         add.w   d0,bv_edlin(a6) otherwise get line to edit next time
+edit2
         move.l  bv_bfp(a6),d3
         sub.l   bv_bfbas(a6),d3 put cursor at end of line
 edit
-        bsr.s   comch           only allow edit if reading from console
+        bsr     comch           only allow edit if reading from console
         jsr     bp_rdbuf(pc)    read line into the buffer
         bne.s   bad_rdb         problem... go sort it out
         tas     bv_brk(a6)      clear break
@@ -83,13 +88,144 @@ edit
 trimit
         subq.l  #1,a1
         cmp.l   bv_bfbas(a6),a1
+        
+        GENIF   CMD_HIST = 0
         beq.s   universe        ignore totally blank line
+        ENDGEN
+        
+        GENIF   CMD_HIST <> 0
+        bne.s   chk_blnk        ; if history enabled
+        tst.b   bv_arrow(a6)    ; arrow down or enter?
+        beq     universe        ; yes, ignore blank line 
+        bra.s   term_lf         ; else, check history
+        ENDGEN
+        
+chk_blnk        
         cmp.b   -1(a6,a1.l),d7  strip off trailing blanks
         beq.s   trimit
-        addq.l  #1,a1
+term_lf
+        addq.l  #1,a1           ; point past terminating char
         move.b  #10,-1(a6,a1.l) put in a straight line feed
         move.l  a1,bv_bfp(a6)   now update the buffer running pointer
+
+        GENIF   CMD_HIST = 0    ; only if history not enabled
         bra.s   parse           go parse the line
+        ENDGEN
+
+        GENIF   CMD_HIST <> 0   ; if history enabled
+
+        tst.b   bv_auto(a6)     ; AUTO enabled?
+        bne.s   parse2          ; yes, don't disturb it!
+        tst.l   bv_comch(a6)    ; reading from console?
+        bne.s   parse2          ; no, skip this
+        tst.l   bv_hichn(a6)    ; do we have a history channel?
+        ble.s   parse2          ; no, bail out
+        move.l  a1,d1
+        move.l  bv_bfbas(a6),a1
+        sub.l   a1,d1           ; get length of line + LF
+        moveq   #-1,d3          ; timeout
+        tst.b   bv_arrow(a6)    ; used arrow keys?
+        bne.s   clr_line        ; yes, process history
+        cmpi.w  #1,d1           ; only LF?
+        ble.s   parse2          ; yes, ignore it
+        move.w  d1,d2           ; copy length to d2
+        move.l  bv_hichn(a6),a0 ; get history channel id
+        moveq   #io.sstrg,d0
+        trap    #4
+        trap    #3              ; send new line to history
+parse2
+        bra     parse           ; and go parse it
+        
+; +++ backported from SMSQ/E source
+; Clear old string from screen and set cur pos to start of empty space
+; d1 = string length as given from iob.elin
+; a0 = CON channel ID
+clr_line
+	move.l	d1,-(sp)
+	moveq	#sd.extop,d0
+	lea	sbm_getcurpos,a2	 ; re-construct cursor pos of line start
+	trap	#3
+	move.l	d1,d4
+
+	moveq	#sd.pixp,d0
+	move.w	d1,d2
+	swap	d1
+	moveq	#-1,d3
+	trap	#3			 ; set cursor pos to string position
+	move.l	(sp)+,d1
+
+	move.w	d1,d2			 ; length of string
+	moveq	#' ',d0
+	move.l	bv_bfbas(a6),a1 	 ; buffer base
+	bra.s	sbm_hcloops
+sbm_hcloop
+	move.b	d0,(a6,a1.l)		 ; clear string
+	addq.l	#1,a1
+sbm_hcloops
+	dbf	d1,sbm_hcloop
+	moveq	#io.sstrg,d0
+	move.l	bv_bfbas(a6),a1 	 ; buffer base
+	trap	#4
+	trap	#3			 ; overwrite old string with blanks
+	moveq	#sd.pixp,d0
+	move.l	d4,d1
+	swap	d1
+	move.w	d4,d2
+	moveq	#-1,d3
+	trap	#3			 ; set cursor pos to string position
+
+        move.l  bv_hichn(a6),a0         ; history channel id
+        tst.b   bv_arrow(a6)            ; test arrow flag (again!)
+        blt.s   sbm_histup              ; skip with arrow up
+; Down key was pressed
+;sbm_histdown
+;	bsr.s	sbm_clearstr		 ; done this already
+	moveq	#fs.posre,d0
+	moveq	#-2,d1			 ; back down by 2
+;	moveq	#-1,d3
+;	move.l	bv_hichn(a6),a0 	 ; history channel ID
+	trap	#3
+	moveq	#err.ef,d1
+	cmp.l	d1,d0			 ; out of bonds?
+	bne.s	sbm_gethist		 ; no, go ahead
+	move.l	bv_bfbas(a6),bv_bfp(a6) ; yes, return with empty string
+;	bra.s	sbm_endhist
+        bra     universe                ; loop back
+
+sbm_histup
+;	bsr.s	sbm_clearstr		 ; done this already
+	moveq	#-1,d1
+	moveq	#0,d2			 ; just read FPOS for now
+sbm_huagain
+	moveq	#-1,d3			 ; set here so it's set in sbm_gethist
+	tst.l	d1
+	beq.s	sbm_gethist		 ; at end of history, exit loop
+	moveq	#fs.posre,d0
+	move.l	d2,d1
+	move.l	bv_hichn(a6),a0 	 ; history channel ID
+	trap	#3
+	moveq	#-1,d2			 ; Backtrack in case of EOF
+	cmp.l	#err.ef,d0
+	beq.s	sbm_huagain		 ; if EOF, try to hit last line
+
+sbm_gethist
+	move.l	#$7fff,d0		 ; max allowed size for iob.flin
+	move.l	bv_bfbas(a6),a1 	 ; buffer base
+	move.l	bv_bfbas+8(a6),d2	 ; top of buffer
+	sub.l	a1,d2			 ; buffer size
+	cmp.l	d0,d2			 ; mustn't exceed max value
+	ble.s	sbm_histget
+	move.l	d0,d2
+sbm_histget
+	moveq	#io.fline,d0
+	trap	#4
+	trap	#3			 ; get line out of history
+	subq.l	#1,a1
+	move.l	a1,bv_bfp(a6) 	        ; set cursor pos to end of line
+; ---        
+        bra     edit2           ; and go editing it
+
+        ENDGEN                  ; CMD_HIST
 
 comch
         move.l  bv_comch(a6),a0 get command channel
@@ -118,7 +254,7 @@ parse
         moveq   #err.bl,d0
         jsr     ib_ernol(pc)    call error with no line number
         move.w  (sp)+,d3
-        bra.s   edit            continue edit
+        bra     edit            continue edit
 
 mist
         jsr     pa_mist(pc)
@@ -237,4 +373,52 @@ ib_1
         jsr     ib_start(pc)    start from top of a line
         bra.s   ib_ret
 
+;+++
+; Re-construct cursor position of start of string after an iob.elin call.
+; Needs to be called through iow.xtop
+;
+;	entry				exit
+; d1	curpos as given from iob.edlin	X/Y pixel cursor position in window
+; a0	CDB				CDB
+;---
+        GENIF   CMD_HIST <> 0
+sbm_getcurpos
+	subq.w	#1,d1
+	andi.l	#$ffff,d1
+	moveq	#0,d2
+	move.w	sd_xpos(a0),d2		; X cursor position
+	divu	sd_xinc(a0),d2		; now in cursor increments
+	swap	d2
+	move.w	d2,d5			; remember offset
+	swap	d5
+	clr.w	d2
+	swap	d2			; d2 = X cur pos in cur increment
+	moveq	#0,d3
+	move.w	sd_ypos(a0),d3		; Y cursor position
+	divu	sd_yinc(a0),d3		; now in cursor increments
+	swap	d3
+	move.w	d3,d5			; remember offset
+	clr.w	d3
+	swap	d3			; d3 = Y cur pos in cur increment
+	moveq	#0,d4
+	move.w	sd_xsize(a0),d4
+	divu	sd_xinc(a0),d4		; calculate window width in cursor inc
+	mulu	d4,d3
+	add.w	d2,d3			; now a stream position
+	sub.l	d1,d3			; subtract string length
+	bcc.s	sgc_1
+	moveq	#0,d3
+	bra.s	sgc_2
+sgc_1	divu	d4,d3			; again X/Y position in cur increment
+sgc_2	move.l	d3,d1
+	swap	d1
+	mulu	sd_xinc(a0),d1		; now in pixel coordinates
+	mulu	sd_yinc(a0),d3
+	swap	d1
+	move.w	d3,d1
+	add.l	d5,d1			; add remaining pixel offset
+	rts
+
+        ENDGEN
+        
         end

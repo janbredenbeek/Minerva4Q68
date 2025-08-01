@@ -27,41 +27,61 @@
         GENIF   Q68_M33 <> 0
         xdef    q68scr_init
         xref    stk_long,cs_fill16,cs_over16,cs_pan16,cs_recol16,cs_scrol16
-        xref    cs_char16
+        xref    cs_char16,cs_fmems,cs_fmeme
         ENDGEN
 
         section q68screen
 
 * Table of relative pointers to 16-bit cs_* routines
 * These are used to build the absolute pointers at the start of the
-* fast memory area. The routines themselves are still in (extra)ROM for now,
-* but will be copied to fast RAM at a later stage (and the pointers adjusted).
+* fast SRAM area. The routines themselves are still in (extra)ROM for now,
+* but will be copied to SRAM at a later stage (and the pointers adjusted).
 
         GENIF   Q68_M33 <> 0
 
 cs_table
-        dc.w    cs_char16-*     ; write character
-        dc.w    cs_scrol16-*    ; scroll
-        dc.w    cs_pan16-*      ; pan
-        dc.w    cs_fill16-*     ; fill an area
-        dc.w    cs_over16-*     ; fill with OVER
-        dc.w    cs_recol16-*    ; recolour an area
-        dc.w    0               ; end marker
+        dc.w    cs_char16-cs_fmems   ; write character
+        dc.w    cs_scrol16-cs_fmems  ; scroll
+        dc.w    cs_pan16-cs_fmems    ; pan
+        dc.w    cs_fill16-cs_fmems   ; fill an area
+        dc.w    cs_over16-cs_fmems   ; fill with OVER
+        dc.w    cs_recol16-cs_fmems  ; recolour an area
+;        dc.w    -1                   ; end marker
+
+cs_tabn equ     (*-cs_table)/2       ; number of entries in table
 
 q68scr_init
         trap    #0              ; better go supervisor when altering fastmem!
         lea     cs_table(pc),a1
-        lea     q68_sramb,a2
-        cmpi.l  #$19004,(a2)+
-        bne.s   init_oops     ; fastmem area should be empty!
+        lea     q68_sramb+4,a2
+        cmpa.l  -4(a2),a2
+        bne.s   init_oops       ; fastmem area should be empty!
+        moveq   #cs_tabn*4,d1   ; number of entries * 4
+        
+        GENIF   Q68_M33_FAST = 0 ; when not using SRAM
+        lea     cs_fmems,a3     ; start of routines in ROM
+        ENDGEN
+        
+        GENIF   Q68_M33_FAST <> 0 ; when using SRAM
+        lea     (a2,d1.w),a3    ; start of routines in SRAM
+        ENDGEN
 init_lp
         move.w  (a1)+,d0        ; get relative pointer
-        beq.s   init_ok         ; end reached
-        lea     -2(a1,d0.w),a0  ; get effective address
-        move.l  a0,(a2)+        ; and store it
-        bra     init_lp         ; loop for next
-init_ok
-        move.l  a2,q68_sramb    ; set new free memory pointer
+        lea     (a3,d0.w),a0    ; get effective address
+        move.l  a0,(a2)+        ; and store it (either ROM or SRAM)
+        subq.w  #4,d1
+        bgt     init_lp         ; loop for next
+
+        GENIF   Q68_M33_FAST <> 0 ; when using SRAM
+        lea     cs_fmems,a1     ; start of routines in ROM
+        move.w  #cs_fmeme-cs_fmems,d1 ; number of bytes to copy
+init_cpy
+        move.l  (a1)+,(a2)+     ; copy code to SRAM
+        subq.w  #4,d1
+        bgt     init_cpy        ; 4 bytes at a time
+        ENDGEN
+        
+        move.l  a2,q68_sramb    ; set new free SRAM pointer
         lea     okmsg,a1
         bra.s   init_end
 init_oops
@@ -73,7 +93,7 @@ init_end
         jmp     (a2)            ; print message and exit
 
 okmsg   dc.w    okend-*-2
-        dc.b    'Q68 16-bit screen driver v1.0  JB 2023',10
+        dc.b    'Q68 16-bit screen driver v1.0  JB 2023-25',10
 okend   equ     *
 
 failmsg dc.w    failend-*-2

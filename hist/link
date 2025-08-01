@@ -1,0 +1,5 @@
+filetype 0
+
+program hist_bin
+
+input   hist_init_rel

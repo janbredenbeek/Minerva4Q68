@@ -98,7 +98,9 @@ bv_wvbas ds.l   1       base of wv area wrt vvbas
         ds.w    1       bv_lblen now spare, was used by fastload?
         ds.l    1       bv_lbuff now spare, ditto
 bv_toe  ds.b    1       turn off enhancements: bit 7 int toks (was bv_filst)
-        ds.b    11      spare
+        ds.b    3       ($d5) spare (original 11)
+bv_hichn ds.l   1       ($d8) command history channel (different from SMSQ/E!)
+        ds.l    1       ($dc) spare
 bv_alchp ds.l   1       TK2 linked common heap allocations
         ds.l    2       spare
 bv_qlibx ds.l   1       Qliberator stuff

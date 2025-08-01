@@ -87,6 +87,11 @@ error
         bra.s   exit
 
 fill
+        GENIF   Q68_M33 = 0
+        jmp     cs_fill(pc)
+        ENDGEN
+        
+        GENIF   Q68_M33 <> 0
         move.l  sv_chtop(a6),a2
         btst    #sx..m33,sx_dmod(a2)
         lea     cs_fill(pc),a2
@@ -94,6 +99,7 @@ fill
         move.l  cs.fill16,a2
 fill2
         jmp     (a2)
+        ENDGEN
 
 * Entry point to just redefine a border
 

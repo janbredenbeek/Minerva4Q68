@@ -28,7 +28,9 @@
         section ss_list
 
         dc.b    0,1             address       will be set up with
-        dc.w    ss_ext+24*2-*   base+$00: 00000000 + 11 addresses + 13 words
+; JB 20250801: introduced subversion, so 1 extra word at $4A
+;        dc.w    ss_ext+24*2-*   base+$00: 00000000 + 11 addresses + 13 words
+        dc.w    ss_ext+25*2-*   base+$00: 00000000 + 11 addresses + 14 words
         dc.b    2,11*2-1
         dc.w    ip_poll-*       base+$50: 00000000 ip_poll
         dc.b    2,1
@@ -41,7 +43,8 @@
         dc.w    od_con+3*2-*    base+$90: base+$a0 od_conio od_conop od_concl
         dc.w    od_net+3*2-*    base+$a0: 00000000 od_netio od_netop od_netcl
         dc.b    1,3*2-1
-        dc.w    dd_mdv+12*2-*   base+$b0: 00000000 dd_mdvio dd_mdvop dd_mdvcl
+;        dc.w    dd_mdv+12*2-*   base+$b0: 00000000 dd_mdvio dd_mdvop dd_mdvcl
+        dc.w    dd_mdv+13*2-*   base+$b0: 00000000 dd_mdvio dd_mdvop dd_mdvcl
 *                               base+$c0: md_slave 00000000 00000000 md_formt
 *                               base+$d0: 0 md_end 0 3 m d  v 0 0000 00000000
 *                               base+$e0: end of system extension

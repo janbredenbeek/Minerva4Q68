@@ -5,7 +5,7 @@
 *
 * Modifications for Q68 by Jan Bredenbeek
 *
-* Copyright (C) 2018-2024 Jan Bredenbeek
+* Copyright (C) 2018-2025 Jan Bredenbeek
 * 
 * This program is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -21,6 +21,12 @@
 * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ; 
 ; Changelog:
+;
+; 20250801 JB (v1.70, release)
+;   Extra call for initialisation of HISTORY device (see hist subdirectory)
+;   Preliminary support for DV3 modules following extrarom image instead of
+;   QL extension ROM. If you ever succeed in backporting SMSQ/E's WIN/FAT/QUB
+;   driver, you can set DV3_DRVR to 1 in mincf. Currently still disabled...
 ;
 ; 20240224 JB (v1.65, release)
 ;   Removed external interrupt handler for keyboard. HOTKEY system didn't work
@@ -104,7 +110,7 @@
         xref    disp_mode,scr_base,scr_llen,scr_xlim,scr_ylim
         xref    free_fmem,alfm,ser_init,rom_end
 
-version	setstr	1.65
+version	setstr	1.70
 
 DEBUG	equ	0		; set to 1 to display variables and result code
 
@@ -124,6 +130,10 @@ DEBUG	equ	0		; set to 1 to display variables and result code
 
         GENIF   Q68_M33 <> 0
         xref    q68scr_init
+        ENDGEN
+        
+        GENIF   CMD_HIST <> 0
+        xref    his_base
         ENDGEN
 
 string$	macro	a
@@ -162,7 +172,7 @@ romh:
         ds.w     0
 
 rom_init 
-        movem.l a0/a3,-(sp)     ; save these registers
+        movem.l a0/a3,-(sp)  ; save these registers
         moveq   #mt.inf,d0
 	trap	#1
 	cmpi.l	#'1.60',d2	; check QDOS version
@@ -184,8 +194,14 @@ rom_init
         jsr     q68scr_init       ; initialise screen driver
         ENDGEN
 
+        GENIF   CMD_HIST <> 0
+        jsr     his_base          ; initialise history
+        ENDGEN
+
         move.l  (sp),a0           ; channel ID (should be 0)        
         lea     rom_end(pc),a3    ; end of our code
+
+        GENIF   DV3_DRVR = 0      ; if QL style ROM format driver
         cmpi.l  #$4afb0001,(a3)   ; is there another extension ROM after us?
         bne.s   bye               ; no, exit
         lea     8(a3),a1          ; ROM name
@@ -200,6 +216,16 @@ in_nobas
         move.w  6(a3),d0          ; init routine?
         beq.s   bye               ; no
         jsr     (a3,d0.w)         ; else, call it
+        ENDGEN
+        
+        GENIF   DV3_DRVR <> 0     ; if DV3 style driver
+        lea     22(a3),a1         ; offset to driver signon msg
+        adda.w  (a1),a1
+        move.w  ut.mtext,a2
+        jsr     (a2)              ; print signon
+        add.l   (a3),a3           ; point to init routine
+        jsr     (a3)              ; call it
+        ENDGEN
 bye     
         movem.l (sp)+,a0/a3       ; restore registers
         rts
