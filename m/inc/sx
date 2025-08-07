@@ -56,7 +56,7 @@ sx_serb ds.l    4       base+$80 od_serio od_serop od_sercl
 sx_pipb ds.l    4       base+$90 io_serq  od_pipop od_pipcl
 sx_con  ds.l    4       base+$a0 od_conio od_conop od_concl
         ds.l    4       0 od_netio od_netop od_netcl
-        ds.l    8       0 dd_mdvio dd_mdvop dd_mdvcl md_slave 0 0 md_formt
+sx_mdv  ds.l    8       0 dd_mdvio dd_mdvop dd_mdvcl md_slave 0 0 md_formt
         ds.b    4+2+3   md_end 3 'mdv'
         ds.b    3       spare bit
 sx_pipc ds.l    1       pipe driver link word

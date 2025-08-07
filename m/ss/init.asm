@@ -196,7 +196,8 @@ lp_link
         add.b   d0,d0           is there any copying to do?
         bcs.s   lp_addr         if not sx/mdv, no extra bits
         clr.l   -(a4)           (must clear, as we have not zeroed this area)
-        clr.w   -(a4)           3 words reserved at end of sx/mdv entries
+;        clr.w   -(a4)           3 words reserved at end of sx/mdv entries
+;                               2 words reserved at end of sx/mdv entries
 lp_copy
         move.w  -(a1),-(a4)     copy the top bit of the sx/mdv entries ...
         bne.s   lp_copy         ... until we hit a zero

@@ -110,7 +110,7 @@
         xref    disp_mode,scr_base,scr_llen,scr_xlim,scr_ylim
         xref    free_fmem,alfm,ser_init,rom_end
 
-version	setstr	1.70
+version	setstr	1.71
 
 DEBUG	equ	0		; set to 1 to display variables and result code
 
@@ -119,6 +119,7 @@ DEBUG	equ	0		; set to 1 to display variables and result code
 
         include m_mincf
         include extrarom_userdefs
+        include m_inc_assert
         include m_inc_sv
         include m_inc_sx
         include m_inc_bv
@@ -165,26 +166,27 @@ BOOTDEV equ     0
 	section q68_q68hw
         
 romh:
-	dc.l	$4afb0001       ; ROM marker
-	dc.w	procs-romh
-	dc.w	rom_init-romh
-	string$	{'Q68 extension ROM v[version]  JB 2023',10}
+        dc.l	$4afb0001       ; ROM marker
+        dc.w	procs-romh
+        dc.w	rom_init-romh
+        string$	{'Q68 extension ROM v[version]  JB 2023',10}
         ds.w     0
 
 rom_init 
-        movem.l a0/a3,-(sp)  ; save these registers
+        movem.l a0/a3,-(sp)     ; save these registers
         moveq   #mt.inf,d0
-	trap	#1
-	cmpi.l	#'1.60',d2	; check QDOS version
-	blo.s	initerr		; must be Minerva
-	cmpi.l	#'2.00',d2	; not SMSQ/E...
-	bhs.s	initerr
+        trap    #1
+        cmpi.l  #'1.60',d2      ; check QDOS version
+        blo.s   initerr	        ; must be Minerva
+        cmpi.l  #'2.00',d2      ; not SMSQ/E...
+        bhs.s   initerr
         move.b  #CPU,sys_ptyp(a0)
         move.b  #SYS_MACHINE,sys_mtyp(a0)
-	move.l	sv_chtop(a0),a4	; base of extended sysvars
-	lea	$b0(a4),a0	; linkage block of MDV driver         
+        move.l	sv_chtop(a0),a4	; base of extended sysvars
+        assert  sx_mdv,$b0      ; DEBUG
+        lea	sx_mdv(a4),a0   ; linkage block of MDV driver         
         moveq   #mt.rdd,d0
-	trap	#1		; unlink MDV driver
+        trap	#1              ; unlink MDV driver
         bsr.s   q68kbd_init       ; initialise keyboard
         bne.s   initerr
         jsr     ser_init

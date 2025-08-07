@@ -2,27 +2,35 @@
 110 QMake_out$="ram8_"
 120 dv3_driver$="wl_minv.dv3"
 130 :
-140 DEFine PROCedure make_minerva
+140 DEFine PROCedure make_minerva(v$)
+141   lang$=""
+142   IF v$(2)="." THEN lang$="english"
+143   IF v$(2)=="g" THEN lang$="german"
+144   IF lang$="" THEN PRINT "*** ERROR: No language associated with this version": STOP
 150   PRINT#0;"Building Minerva..."
-160   EW QMake;"\C " & Min4Q68_dev$ & "m_rom \B"
-170   IF FTEST(QMake_out$ & "M_ROM_bin")=0 THEN
-180     COPY_O QMake_out$ & "M_ROM_bin" TO Min4Q68_dev$ & "M_ROM_bin"
-190   END IF
-200   IF FTEST(QMake_out$ & "M_ROM_map")=0 THEN
-210     COPY_O QMake_out$ & "M_ROM_map" TO Min4Q68_dev$ & "M_ROM_map"
+152   rom$=Min4Q68_dev$ & "M_ROM_" & lang$ & "_bin"
+153   DELETE rom$
+155   map$=QMake_out$ & "m_ROM_map"
+160   EW QMake;"\C " & Min4Q68_dev$ & "m_rom \B \0" & lang$
+170 REMark IF FTEST(QMake_out$ & "M_ROM_bin")=0 THEN
+180 REMark COPY_O Min4Q68_dev$ & "M_ROM_" & lang$ & "_bin" TO minerva$
+190 REMark END IF
+200   IF FTEST(map$)=0 THEN
+210     COPY_O map$ TO Min4Q68_dev$ & "M_ROM_" & v$ & "_map"
 220   END IF
-230   PRINT\"Minerva ROM image is ";FLEN(\Min4Q68_dev$ & "M_ROM_bin");" bytes"
-240   IF FLEN(\Min4Q68_dev$ & "M_ROM_bin") > 48*1024 THEN
+230   PRINT\"Minerva ROM image is ";FLEN(\rom$);" bytes"
+240   IF FLEN(\rom$) > 48*1024 THEN
 250     PRINT\"*** ERROR: Minerva ROM image too large (>48K)": STOP
 260   END IF
 270 END DEFine make_minerva
 280 :
-290 DEFine PROCedure make_standalone
-300   make_minerva
-310   IF FTEST(Min4Q68_dev$ & "M_ROM_bin")=0 THEN
-320     base=ALCHP(48*1024): LBYTES Min4Q68_dev$ & "M_ROM_bin",base
-330     SBYTES_O Min4Q68_dev$ & "Minerva_bin",base,48*1024
-340     PRINT\"Saved 48K ROM image ";Min4Q68_dev$;"Minerva_bin": RECHP base
+290 DEFine PROCedure make_standalone(v$)
+300   make_minerva v$
+310   IF FTEST(rom$)=0 THEN
+320     base=ALCHP(48*1024): LBYTES rom$,base
+325     minerva$=Min4Q68_dev$ & "Minerva_" & v$ & "_bin"
+330     SBYTES_O minerva$,base,48*1024
+340     PRINT\"Saved 48K ROM image ";minerva$: RECHP base
 350   ELSE
 360     PRINT\"*** ERROR: Assembled ROM image not found"
 370   END IF
@@ -56,10 +64,11 @@
 650 END DEFine make_history
 660 :
 670 DEFine PROCedure make_rom
-680   IF FTEST(Min4Q68_dev$ & "M_ROM_bin") < 0: make_minerva
+672   v$="1.98q2"
+680   IF FTEST(Min4Q68_dev$ & "M_ROM_english_bin") < 0: make_minerva v$
 690   IF FTEST(Min4Q68_dev$ & "extrarom_bin") < 0: make_extrarom
 700   base=ALCHP(96*1024)
-710   LBYTES Min4Q68_dev$ & "M_ROM_bin",base
+710   LBYTES Min4Q68_dev$ & "m_ROM_english_bin",base
 720   a=base+48*1024: IF FTEST(Min4Q68_dev$ & "xc000_rom") = 0 THEN
 730     LBYTES Min4Q68_dev$ & "xc000_rom",a
 740     a=a+16*1024
@@ -86,15 +95,12 @@
 950 END DEFine make_rom
 960 :
 970 DEFine PROCedure make_lrespr
-980   IF FTEST(Min4Q68_dev$ & "M_ROM_bin") < 0: make_minerva
+972   v$="1.98q2"
+980   IF FTEST(Min4Q68_dev$ & "M_ROM_english_bin") < 0: make_minerva v$
 990   IF FTEST(Min4Q68_dev$ & "extrarom_bin") < 0: make_extrarom
-1000   IF FLEN(\Min4Q68_dev$ & "Minerva_bin") > 48*1024 THEN
-1010     PRINT "*** ERROR: Minerva image too large (>48K)"
-1020     STOP
-1030   END IF
 1040   base=ALCHP(96*1024+32)
 1050   LBYTES Min4Q68_dev$ & "Min4Q68ldr.bin",base
-1060   LBYTES Min4Q68_dev$ & "M_ROM_bin",base+32
+1060   LBYTES Min4Q68_dev$ & "M_ROM_english_bin",base+32
 1070   a=base+48*1024+32: IF FTEST(Min4Q68_dev$ & "xc000_rom") = 0 THEN
 1080     LBYTES Min4Q68_dev$ & "xc000_rom",a
 1090     a=a+16*1024
@@ -146,19 +152,20 @@
 1550     CLOSE#dirch
 1560     del d$ & "lib"
 1570   END REPeat loop
-1580   del "M_ROM_bin": del "extrarom_bin": del "hist_bin"
+1580   del "m_ROM_english_bin": del "m_ROM_german_bin": del "extrarom_bin": del "hist_bin"
 1590   CLOSE#logchan
 1600 END DEFine make_clean
 1610 :
 1620 DEFine PROCedure Make
-1630   make_minerva: make_extrarom: make_rom: make_lrespr
+1630   make_rom: make_lrespr
 1640 END DEFine Make
 1650 :
 1660 CLS: PRINT "*** Minerva4Q68 Make program ***"
 1670 PRINT\"Options:"
-1680 PRINT\"make_minerva   : Build Minerva (";Min4Q68_dev$;"M_ROM_bin)"
-1685 PRINT "make_standalone: Build standalone Minerva (";Min4Q68_dev$;"Minerva_bin; padded to 48K)"
-1690 PRINT "make_extrarom  : Build ROM drivers (";Min4Q68_dev$;"extrarom_bin)"
+1680 PRINT\"make_minerva [version]   : Build Minerva (";Min4Q68_dev$;"m_ROM_[language]_bin)"
+1685 PRINT "make_standalone [version]: Build standalone Minerva (";Min4Q68_dev$;"Minerva_[version]_bin; padded to 48K)"
+1687 PRINT\"[version] is 1.98+sub for English or 1G98+sub for German"
+1690 PRINT\"make_extrarom  : Build ROM drivers (";Min4Q68_dev$;"extrarom_bin)"
 1700 PRINT "make_history   : Build HISTORY device for Minerva (";Min4Q68_dev$;"hist_bin)"
 1710 PRINT "make_rom       : Build complete Q68 ROM image (";Min4Q68_dev$;"Q68_ROM.SYS)"
 1720 PRINT "make_lrespr    : Build LRESPRable ROM image (";Min4Q68_dev$;"Min4Q68_rext)"
@@ -172,4 +179,4 @@
 1800 IF FTEST(PROGD$ & "QMake") <> 0: PRINT\"** ERROR: QMake not found in your PROGD$ (";PROGD$;")!"
 1810 DATA "m_bf","m_bp","m_bv","m_ca","m_cn","m_cs","m_dd","m_gw","m_ib","m_ii","m_io","m_ip","m_md"
 1820 DATA "m_mm","m_mt","m_nd","m_od","m_pa","m_pf","m_q68","m_ri","m_sb","m_sd","m_ss","m_tb","m_ut"
-1830 DATA "extrarom","hist"
+1830 DATA "m_tb_english","m_tb_german","extrarom","hist"

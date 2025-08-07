@@ -25,11 +25,11 @@ Q68_HIRES   equ 0
 Q68_M33     equ 0
 Q68_M33_FAST equ    0
 SDEBUG      equ 0
-VERS_SUB    equ 'j1'
+; VERS_SUB    equ 'j1' * moved to ver.asm
  ENDGEN
 
  GENIF  q68 <> 0
-VERS_SUB    equ 'q1'
+; VERS_SUB    equ 'q1' * moved to ver.asm
 FULL_RAMTEST	equ	0
 Q68_RAMT	equ 16384	* limit RAMTOP to 16MB
 QL_NET		equ	0

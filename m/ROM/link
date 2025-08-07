@@ -1,4 +1,9 @@
 filetype 0
+
+program m_ROM_#0_bin
+
+input m_rom_ver_rel
+input m_rom_ver_#0_rel
 input m_ss_lib
 input m_io_lib
 input m_ip_lib
@@ -23,5 +28,5 @@ input m_ib_lib
 input m_gw_lib
 input m_cs_lib
 input m_ii_lib
-input m_tb_lib
+input m_tb_#0_lib
 input m_q68_lib

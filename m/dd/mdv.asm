@@ -18,5 +18,6 @@ dd_mdv
         dc.w    md_formt-*
         dc.l    md_end          length of definition block
         dc.w    3,'MDV'         microdrive device name
+        dc.w	-1		dummy word that must not be 0 as sx and mdv
 
         end

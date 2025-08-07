@@ -10,6 +10,7 @@
         xref    ib_clvv
         xref    sb_unvr
         xref    ut_con,ut_err,ut_mint,ut_mtext,ut_wrdef
+        xref.s  vers_sub
 
         GENIF   QL_IIC <> 0
         xref    ii_clock
@@ -411,7 +412,7 @@ ini_disp
         assert  0,mt.inf
 *       moveq   #mt.inf,d0
         trap    #1
-        move.w  #VERS_SUB,-(sp) ; store sub-version
+        move.w  #vers_sub,-(sp) ; store sub-version
         move.l  d2,-(sp)        store qdos version number
         move.l  #10<<24!10<<16!'  ',-(sp) nl,nl,sp,sp
 

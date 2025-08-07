@@ -3,6 +3,10 @@
 
         xref    mm_rechp
         xref    tb_f0,tb_f1,tb_itrn,tb_kbenc,tb_otrn,tb_msg,tb_trn
+        xref.s	vers_major
+        xref.s	vers_country
+        xref.s	vers_minor
+        xref.s	vers_sub
 
         include m_mincf
 
@@ -36,8 +40,12 @@ ss_ext          ;               user routine to call on shift/ctrl/alt/enter
         ;       freeze screen   ctrl/alt/tab            ctrl/f5
         ;       caps lock       shift/ctrl/enter        caps lock
 
-        dc.w    '1.98',4,'JSL1'
-        dc.w    VERS_SUB
+;       dc.w    '1.98',4,'JSL1'
+        dc.b    vers_major
+        dc.b    vers_country
+        dc.w    vers_minor
+        dc.w    4,'JSL1'
+        dc.w    vers_sub
 *       dc.w    0,0             reserved
 
         end

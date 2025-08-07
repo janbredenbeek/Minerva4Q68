@@ -165,6 +165,9 @@ Contributors:
 
 Version history:
 ----------------
+- 08 August 2025: v1.71 released
+  - Fixed a bug in Minerva causing incorrect allocation of sx_\* extended system variables. Minerva version bumped to 1.98j2 and 1.98q2
+  - Introduced German language standalone Minerva version 1G98j2, for use with German keyboards. Note that the Q68 version is English only, but the keyboard layout can be selected using the command KBTABLE n, where n=1 for US keyboards, 44 for UK keyboards and 49 for German keyboard layouts.
 - 01 August 2025: v1.70 released
   - Added command history using HISTORY device! You can now use the arrow up/down keys to browse through the command history, just like in SMSQ/E. Also, the HISTORY device has been backported from SMSQ/E so it's now also available in Minerva. Note that you can still use the AUTO command as before to enter auto-numbered lines and browse through them, in case you don't have the much more advanced Toolkit II's ED full-screen editor available.
   - Since the new command history feature might also be of interest for Minerva users on non-Q68 platforms, a standalone 48K ROM image is now also available for use in emulators  or even real QL hardware. This doesn't incorporate the HISTORY device, which has to be LRESPR'ed separately for command history to work. Also, the I2C support for Minerva MKII has been removed to make room for the command history code.
