@@ -73,7 +73,12 @@ edit2
         move.l  bv_bfp(a6),d3
         sub.l   bv_bfbas(a6),d3 put cursor at end of line
 edit
+        GENIF   CMD_HIST = 0
+        bsr.s   comch
+        ENDGEN
+        GENIF   CMD_HIST <> 0
         bsr     comch           only allow edit if reading from console
+        ENDGEN
         jsr     bp_rdbuf(pc)    read line into the buffer
         bne.s   bad_rdb         problem... go sort it out
         tas     bv_brk(a6)      clear break
@@ -254,7 +259,12 @@ parse
         moveq   #err.bl,d0
         jsr     ib_ernol(pc)    call error with no line number
         move.w  (sp)+,d3
+        GENIF   CMD_HIST = 0
+        bra.s   edit
+        ENDGEN
+        GENIF   CMD_HIST <> 0
         bra     edit            continue edit
+        ENDGEN
 
 mist
         jsr     pa_mist(pc)

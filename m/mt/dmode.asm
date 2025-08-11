@@ -142,8 +142,6 @@ ret_ext
         movem.l reg_on1,-(sp)   ; re-stack
         bra     dm_exit         ; and exit
 
-        ENDGEN
-
 qlmode
         assert  sx_dmod,sx_llen-1,sx_xlim-3,sx_ylim-5
         lea     sx_dmod(a4),a1  
@@ -151,6 +149,7 @@ qlmode
         move.w  #$80,(a1)+      ; sx_llen
         move.l  #512<<16+256,(a1) ; sx_xlim & sx_ylim
         
+        ENDGEN
         jsr     ss_jobc(pc)     find current job
 
         move.w  d1,d3           working copy of d1.w
@@ -284,6 +283,8 @@ setmc
 ret
         rts
 
+        GENIF Q68_HIRES <> 0
+        
 ; DISP_MODE       0,  1,  2,   3,   4,   5,  6,   7
 ; bits-per-pixel:4*,  2, 16, 16,  2,  8, 16, 16
 llen_tab:
@@ -295,4 +296,7 @@ ylim_tab:
 
 ; * DISP_MODE 0 is old QL MODE 8 with 256 pixels across, but still a 512x256
 ;   coordinate system. Therefore SCR_XLIM returns 512, as is the convention.
+
+        ENDGEN
+        
         end

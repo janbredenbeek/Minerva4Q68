@@ -21,10 +21,12 @@
 
 sd_fresh
         move.l  a5,a1
-        move.l  #ra_ssize/4,d0 ... long words
+        GENIF   Q68_HIRES = 0
+        move.w  #ra_ssize/4-1,d0 ... long words
+        ENDGEN
         
         GENIF   Q68_HIRES = 1
-        
+        move.l  #ra_ssize/4,d0 ... long words
         move.l  sv_chtop(a6),a4
         btst    #sx.q68m4,sx_dspm(a4)
         beq.s   cls
@@ -33,20 +35,35 @@ sd_fresh
         ENDGEN
 cls
         clr.l   (a1)+
+        GENIF   Q68_HIRES = 0
+        dbra    d0,cls
+        ENDGEN
+        GENIF   Q68_HIRES <> 0
         subq.l  #1,d0
         bhi     cls
+        ENDGEN
 
 * Now go through all windows open, resetting and clearing them
 
         move.l  sv_chbas(a6),a4 start address of channel tables
 chn_loop
         move.l  (a4)+,d0        next channel
+        GENIF   Q68_HIRES = 0
+        blt.s   next_chn        ... does it exist?
+        ENDGEN
+        GENIF   Q68_HIRES <> 0
         blt     next_chn        ... does it exist?
+        ENDGEN
         move.l  d0,a0           set address of channel definition block
         move.l  sv_chtop(a6),a3 sysvar extension
         lea     sx_con(a3),a3   linkage area for con driver
         cmp.l   ch_drivr(a0),a3 is it a window?
+        GENIF   Q68_HIRES = 0
+        bne.s   next_chn        ... no
+        ENDGEN
+        GENIF   Q68_HIRES <> 0
         bne     next_chn        ... no
+        ENDGEN
 
         GENIF   Q68_HIRES = 1
 

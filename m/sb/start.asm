@@ -397,7 +397,12 @@ wrdef
         jmp     ut_wrdef(pc)    return via window redefinition
 
 boot    dc.w    4,'boot'
+        GENIF   Q68 = 0
+mdv1_   dc.w    9,'mdv1_boot'
+        ENDGEN
+        GENIF   Q68 <> 0
 mdv1_   dc.w    9,'win1_boot'
+        ENDGEN
 boot_len equ mdv1_-boot
 
 ini_disp
@@ -487,7 +492,9 @@ wdef_len equ (tv_def-mon_def)/3
 
 cmds    dc.w    4,'CMD$'
 
+        GENIF   CMD_HIST <> 0
 his_name dc.w   12,'HISTORY_2048'
+        ENDGEN
 
         vect4000 sb_start
 

@@ -19,12 +19,22 @@ sd_curs
         sf      -(sp)           flag -> 0
         tst.b   sd_curf(a0)     check if visible
         bgt.s   toggle
+        GENIF   Q68_M33 = 0
+        bra.s   exit_set
+        ENDGEN
+        GENIF   Q68_M33 <> 0
         bra     exit_set
+        ENDGEN
 
 sd_cure
         st      -(sp)           flag -> -1
         tst.b   sd_curf(a0)     check if already visible
+        GENIF   Q68_M33 = 0
+        bgt.s   exit_ok
+        ENDGEN
+        GENIF   Q68_M33 <> 0
         bgt     exit_ok
+        ENDGEN
         jsr     sd_donl(pc)     issue newline if pending
         bra.s   toggle
 
@@ -37,7 +47,12 @@ sd_cure
 sd_sched
         lea     sv_fstat(a6),a0
         sub.w   d3,(a0)         decrement count
+        GENIF   Q68_M33 = 0
+        bcc.s   rts0
+        ENDGEN
+        GENIF   Q68_M33 <> 0
         bcc     rts0            if it's not gone nasty, leave it
+        ENDGEN
         move.l  sv_chtop(a6),a1 this is where the sysvars extension lives
         moveq   #0,d4
         move.b  sx_fstat(a1),d4

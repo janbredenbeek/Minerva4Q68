@@ -312,6 +312,8 @@ clrbas
 ; word from the stack (format word), leading to stack underflow and possible
 ; corruption of the first entry of the slave block table
 
+        GENIF   1 = 0
+
         dc.l	$48e70001	movem.l a7,-(a7)
         cmpa.l	(a7)+,a7
         beq.s	jump_start	branch if < 68020
@@ -322,6 +324,8 @@ clrbas
         
         move.w	d1,-(a7)	push a dummy format/vector word
 	
+        ENDGEN
+        
 jump_start
         jmp     ss_rj0(pc)      this will start up basic
 

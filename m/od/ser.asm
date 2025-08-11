@@ -153,7 +153,7 @@ close
         bmi.s   cl_czok         nope - no ctrl/z needed
 cl_czlp
         moveq   #'z'&31,d1      we need to put ctrl/z onto the queue
-        bsr     sbyte           try to put out the ctrl/z
+        bsr.s   sbyte           try to put out the ctrl/z
         addq.l  #-err.nc,d0     is it not complete?
         beq.s   cl_czlp         hopefully, we will eventually get there!
 
@@ -315,8 +315,8 @@ tx_par
         add.b   d2,d2           move parity bit into x
         roxr.b  #1,d1           put it into the byte
 tx_pok
-        jsr     io_qin(pc)      stuff byte into queue
+        jmp     io_qin(pc)      stuff byte into queue
 
-        rts
+;        rts
 
         end
