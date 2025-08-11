@@ -21,8 +21,10 @@
 ; Changelog:
 ;
 ; 2025-07-28 First version
+;
+; 2025-08-11 Now accepts foreign language versions (1A98 - 1Z99) too.
 
-version setstr  1.00
+version setstr  1.01
 
         include m_mincf
         include extrarom_userdefs
@@ -49,8 +51,18 @@ his_base
         trap    #1
         tst.l   d1
         bne.s   his_err         ; must be launched from Job 0!
-        cmpi.l  #'1.98',d2
-        bne.s   his_err         ; no Minerva!
+        andi.b  #$fe,d2
+        cmpi.w  #'98',d2        ; minor version must be 98 or 99
+        bne.s   his_err
+        swap    d2
+        cmpi.w  #'1.',d2        ; accept 1.98 or 1.99
+        beq.s   ver_ok
+        andi.w  #$ffdf,d2
+        cmpi.w  #'1A',d2
+        blt.s   his_err         ; Also accept 1A98...
+        cmpi.w  #'1Z',d2
+        bgt.s   his_err         ; ... to 1Z99 for foreign languages
+ver_ok
         tst.l   bv_hichn(a6)    ; is there a HISTORY channel already?
         bgt.s   his_exit        ; Yes, leave it alone!
         jsr     his_init        ; call the actual initialisation routine
@@ -80,7 +92,7 @@ his_exit
         
 his_name string$ 'HISTORY_2048'
 his_msg  string$ {'HISTORY device for Minerva v[version] JB 2025',10}
-his_erms string$ {'*** Cannot initialise HISTORY device!',10}
+his_erms string$ {'*** Cannot initialise HISTORY device!',10,'(maybe incorrect Minerva version?',10}
 
 his_init equ    *
 
