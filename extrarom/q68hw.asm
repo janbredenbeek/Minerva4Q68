@@ -5,7 +5,7 @@
 *
 * Modifications for Q68 by Jan Bredenbeek
 *
-* Copyright (C) 2018-2025 Jan Bredenbeek
+* Copyright (C) 2018-2026 Jan Bredenbeek
 * 
 * This program is free software: you can redistribute it and/or modify
 * it under the terms of the GNU General Public License as published by
@@ -21,6 +21,23 @@
 * along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ; 
 ; Changelog:
+;
+; 20260106 JB (v1.80, release)
+;
+;   No changes, just bumped version and year of release...
+;
+; 20251130 JB (v1.73, interim)
+;   MACHINE now returns correct machine number (Q68=18, Q0=19, QIMSI Gold=21)
+;   KBD_TABLE is now synonymous to KBTABLE for compatibility
+;   CONFIG section added
+;
+; 20251124 JB (v1.72, interim)
+;   SER driver now supports QIMSI Gold USB serial port as SER2
+;   SER driver now uses direct I/O when I/O buffers set to 0
+;   SER driver now relocates physical I/O to SRAM if possible
+;
+; 20250808 JB (v1.71, interim)
+;   Setting EXDEBUG to 1 activates exception debugger
 ;
 ; 20250801 JB (v1.70, release)
 ;   Extra call for initialisation of HISTORY device (see hist subdirectory)
@@ -107,12 +124,14 @@
 ;   Included tables for UK and US keyboard layouts
 ;   Set symbol q68_keyc to 1 for US, 44 for UK and 49 for DE
 
+        xref    qcf_txb1,qcf_rxb1,qcf_txb2,qcf_rxb2,qcf_ser2,qcf_smem
         xref    disp_mode,scr_base,scr_llen,scr_xlim,scr_ylim
         xref    free_fmem,alfm,ser_init,rom_end
 
-version	setstr	1.71
+version	setstr	1.80
 
-DEBUG	equ	0		; set to 1 to display variables and result code
+DEBUG    equ     0               ; set to 1 to display variables and result code
+EXDEBUG  equ     0               ; set to 1 for exception debugging
 
 ;*  q68_keyc equ	1		; keyboard layout code (1 = US, 44 = UK, 49 = DE) 
 ;*  should go into userdefs
@@ -128,6 +147,7 @@ DEBUG	equ	0		; set to 1 to display variables and result code
         include m_inc_mt
         include m_inc_vect
         include m_inc_q68
+        include extrarom_MultiConfig02
 
         GENIF   Q68_M33 <> 0
         xref    q68scr_init
@@ -163,14 +183,58 @@ BOOTDEV equ     0
 * our code. If there is one, we do the usual initialisation that the system
 * ROM does.
 
-	section q68_q68hw
+	section header
         
 romh:
         dc.l	$4afb0001       ; ROM marker
         dc.w	procs-romh
         dc.w	rom_init-romh
-        string$	{'Q68 extension ROM v[version]  JB 2023',10}
+        string$	{'Q68 extension ROM v[version]  JB 2026',10}
         ds.w     0
+
+        section config
+
+qcf_kbl  dc.w    1
+
+        mkcfstart
+        
+        mkcfhead {Minerva4Q68},{1.00}
+        
+          mkcfitem 'M4Q0',word,'L',qcf_kbl,,,\
+          {Default keyboard language code 1=US, 44=UK, 49=D},0,$7fff
+          
+          mkcfitem 'M4Q1',word,'T',qcf_txb1,,,\
+          {Default transmit buffer size for SER1},0,$7fff
+
+          mkcfitem 'M4Q2',word,'R',qcf_rxb1,,,\
+          {Default receive buffer size for SER1},0,$7fff
+          
+          mkcfitem 'M4Q5',code,'2',qcf_ser2,,,\
+	  {Enable second serial port?}\
+	  0,N,{No},1,Y,{Yes}
+
+          mkcfitem 'M4Q3',word,0,qcf_txb2,,,\
+          {Default transmit buffer size for SER2},0,$7fff
+
+          mkcfitem 'M4Q4',word,0,qcf_rxb2,,,\
+          {Default receive buffer size for SER2},0,$7fff
+          
+          mkcfitem 'M4Q5',code,0,qcf_smem,,,\
+	  {Use fast memory for SER driver?}\
+	  0,N,{No},1,Y,{Yes}
+          
+        mkcfblend
+        
+        mkcfend
+
+sys.mq68  equ	  $12		   Q68
+sys.mq0   equ	  $13		   Q0
+sys.mqig  equ	  $15		   Qimsi Gold
+
+        section q68_q68hw
+
+mach_tb dc.b    sys.mq68,sys.mq0,sys.mqig
+        ds.w    0
 
 rom_init 
         movem.l a0/a3,-(sp)     ; save these registers
@@ -181,12 +245,19 @@ rom_init
         cmpi.l  #'2.00',d2      ; not SMSQ/E...
         bhs.s   initerr
         move.b  #CPU,sys_ptyp(a0)
-        move.b  #SYS_MACHINE,sys_mtyp(a0)
+        move.b  q68_mach,d0     ; get machine id
+        move.b  mach_tb(pc,d0.w),sys_mtyp(a0) ; set MACHINE variable
         move.l	sv_chtop(a0),a4	; base of extended sysvars
         assert  sx_mdv,$b0      ; DEBUG
         lea	sx_mdv(a4),a0   ; linkage block of MDV driver         
         moveq   #mt.rdd,d0
         trap	#1              ; unlink MDV driver
+        
+        GENIF   EXDEBUG = 1
+        xref    extrap
+        jsr     extrap(pc)        ; initialise exception debugger
+        ENDGEN
+        
         bsr.s   q68kbd_init       ; initialise keyboard
         bne.s   initerr
         jsr     ser_init
@@ -237,6 +308,9 @@ initerr	suba.l	a0,a0
 	move.w	ut.mtext,a2
 	jsr	(a2)		; print error message
         bra     bye
+
+        
+;        section q68_q68hw
 
 ****** q68 PS2 keyboard interface ********
 
@@ -322,7 +396,7 @@ q68kbd_init:
 ;  set ASCII table and clear actual key.
 ;; most code redundant as MT.ALCHP has cleared out area already!
 
-	move.w  #q68_keyc,d1    ; set from userdefs
+	move.w  qcf_kbl,d1      ; from config secion
         bsr     set_kb          ; set keyboard language
         beq.s   init_2          ; OK?
         lea	L01_KTAB(pc),a0 ; No, default to US
@@ -412,9 +486,11 @@ inerrms	string$	{'- Incompatible QDOS Version or other init error',10}
 ************************************
 * Procedure and function definitions
 
-procs   dc.w    3               ; three procedures
+procs   dc.w    4               ; four procedures
         dc.w    kbtable-*
         dc.b    7,'KBTABLE'
+        dc.w    kbtable-*
+        dc.b    9,'KBD_TABLE'
         dc.w    disp_mode-*
         dc.b    9,'DISP_MODE'
         dc.w    slug-*

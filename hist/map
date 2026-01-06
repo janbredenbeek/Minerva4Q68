@@ -1,4 +1,4 @@
-Link dos7_hist_bin                                                                              20:51 11 Aug 2025  Page 1
+Link dos7_hist_bin                                                                              16:01  1 Dec 2025  Page 1
 
 Linker command file  Ram8_hist_link
 Map file             Ram8_hist_map
@@ -6,11 +6,11 @@ Program file         dos7_hist_bin
 
 INPUT       dos7_hist_init_rel
 
-SECTION  000000  000AA8  HISTORY
-000000    HIST_INIT GST 68000 Macro Assembler Quanta V1.06 20:51 11/08/25
+SECTION  000000  000AAA  HISTORY
+000000    HIST_INIT GST 68000 Macro Assembler Quanta V1.06 16:01 01/12/25
    000000  HIS_BASE
 End of program
-000AA8
+000AAA
 
 
 0  errors

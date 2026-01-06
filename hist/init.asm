@@ -92,7 +92,7 @@ his_exit
         
 his_name string$ 'HISTORY_2048'
 his_msg  string$ {'HISTORY device for Minerva v[version] JB 2025',10}
-his_erms string$ {'*** Cannot initialise HISTORY device!',10,'(maybe incorrect Minerva version?',10}
+his_erms string$ {'*** Cannot initialise HISTORY device!',10,'(maybe incorrect Minerva version?)',10}
 
 his_init equ    *
 

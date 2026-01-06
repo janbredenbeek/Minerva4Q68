@@ -4,7 +4,7 @@ Minerva4Q68
 Description
 -----------
 
-A port of the Minerva operating system for the Q68 (Sinclair QL clone).
+A port of the Minerva operating system for the Q68 (Sinclair QL clone) and compatibles, such as QIMSI Gold and Qzero.
 
 The Minerva operating system was originally designed as a replacement ROM operating system for the Sinclair QL computer, currently licenced under GPLv3. This port is aimed at the Q68, an FPGA-based replacement board for the QL. It is not intended as a replacement for the SMSQ/E OS supplied with the Q68, as SMSQ/E is far more extensive and better suited to support the Q68 hardware than the 48K ROM-based Minerva. We just provide this port to demonstrate the Q68's ability to run 'oldskool' ROM images, give Q68 users the Minerva look and feel, and maybe provide an opportunity to run badly written software that doesn't run on SMSQ/E (but chances are big that this software won't run on Minerva either).
 
@@ -18,8 +18,8 @@ BUILDING:
 The complete ROM image and drivers are ready-built, see INSTALLATION below for instructions how to install it. However, if you want to rebuild Minerva and/or the extrarom drivers, you will need the following:
 
 - a QDOS or (preferrably) SMSQ/E system on suitable hardware. A bare QL with 128K RAM and floppies won't do, you will need several megabytes of storage to assemble and link the system together. The Q68 itself has enough storage but you will need some patience. Use QPC2 or another emulator if you want more speed.
-- The QMAC and QLINK macro-assembler and linker. You can download them from https://dilwyn.theqlforum.com/asm/index.html. These are enhanced versions of the GST Macro Assembler and linker, now freeware for non-commercial purposes. As an alternative for QLINK, you may also use the Qjump linker from SMSQ/E's source.
-- The QMake program, also available from the download link mentioned above. This program requires the Pointer Environment (already included in SMSQ/E) and the QMenu extension (https://dilwyn.theqlforum.com/tk/qmenu805.zip) installed.
+- The QMAC and QLINK macro-assembler and linker. You can download them from https://sinclairql.net/djw/asm/index.html. These are enhanced versions of the GST Macro Assembler and linker, now freeware for non-commercial purposes. As an alternative for QLINK, you may also use the Qjump linker from SMSQ/E's source.
+- The QMake program, also available from the download link mentioned above. This program requires the Pointer Environment (already included in SMSQ/E) and the QMenu extension (https://sinclairql.net/djw/tk/qmenu805.zip) installed.
 - The Make.bas SBASIC program in this repository for easy building.
 
 You might need to do some configuration on the QMAC, QLINK, and QMake programs using the menuconfig program to get the device and directory path right. The original build used 'win1_' as base device for the whole repository, which was hardcoded in all .asm and cct files. I have stripped the base device from all 'include' directives in the .asm files, which should simplify building on any platform provided that you set the default data directory (DATA_USE statement) correctly.
@@ -52,7 +52,7 @@ The Q68_ROM.SYS file should be copied to the root directory of a FAT32-formatted
 
 The 80K ROM images contain the Minerva operating system, a keyboard driver for US, UK and DE (German) keyboard layouts, and a SDHC card driver. Note that in the current build the MDV driver is still present but disabled since there is no MDV hardware in the Q68.
 
-The keyboard language may be set using the KBTABLE command, which has the telephone country code as parameter. Currently, the supported codes are US (1), UK (44), and German (49). The default is US; you may change this by editing the userdef file in the extrarom directory and rebuilding it.
+The keyboard language may be set using the KBTABLE command, which has the telephone country code as parameter. Currently, the supported codes are US (1), UK (44), and German (49). The default is US; you may change this by configuring the Q68_ROM.SYS file (see CONFIGURATION section below).
 
 By default, the devices win1_ and win2_ will be mapped to container files QLWA.WIN on SDHC drives 1 and 2 respectively. If present, the devices qub1_ and qub2_ will be mapped to Qubide container files QL_BDI.BIN on SDHC drives 1 and 2 respectively. This can be changed by configuring the Q68_ROM.SYS file (see below).
 
@@ -79,12 +79,18 @@ SBYTES Min4Q68_rext,base,size
 CONFIGURATION:
 --------------
 
-The devices win1_ to win8_ and qub1_ to qub8_ can be configured to be mapped to any \*.WIN (QLWA format) or \*.BIN (Qubide format) container file by using the CONFIG or MENUCONFIG program on the Q68_ROM.SYS file. You MUST use a V2 capable version of these programs. Suitable CONFIG programs can be found on https://dilwyn.theqlforum.com/config/index.html.
+The devices win1_ to win8_ and qub1_ to qub8_ can be configured to be mapped to any \*.WIN (QLWA format) or \*.BIN (Qubide format) container file by using the CONFIG or MENUCONFIG program on the Q68_ROM.SYS file. You MUST use a V2 capable version of these programs. Suitable CONFIG programs can be found on https://sinclairql.net/djw/config/index.html. 
+
+In addition, the following items can be configured as well:
+  - Default keyboard language code. Currently accepts 1 (US), 44 (UK), and 49 (DE).
+  - Enable second serial port. Default is enabled, disabling it disables the SER2 device.
+  - Default size of transmit and receive buffers for SER1 and SER2. These can be changed at runtime using the SER_BUFF command.
+  - Use fast memory for SER driver. Enabling this places the most time-critical routines of the serial driver into the 12K fast memory area. Note that the serial throughput gained by this is very marginal and only noticable when using QIMSI Gold's USB serial port at very high speeds. In other cases, disabling this will have no negative effect and saves a few hundred bytes of Fast Memory.
 
 HIGH RESOLUTION MODE 1024x768x4
 -------------------------------
 
-From v1.4 onwards, the Q68's 1024x768x4 mode is supported. Note that this mode has not been tested extensively so please use it with caution. 
+From v1.4 onwards, the Q68's 1024x768x4 mode is supported.
 
 The 1024x768x4 mode is implemented using the DISP_MODE command with a subset of the SMSQ/E version. Currently, modes 0 (256x256x8), 1 (512x256x4), and 4 (1024x768x4) are supported. Implementing the full range, including 65536-colour modes, would require a total rewrite of the screen drivers, including implementation of the GD2 colour schemes, which is far beyond the scope of this project and already available within SMSQ/E.
 
@@ -120,29 +126,50 @@ The functions SCR_BASE, SCR_LLEN, SCR_XLIM and SCR_YLIM return the base address,
 SERIAL PORT SUPPORT
 -------------------
 
-From v1.6 onwards, the Q68's serial port is supported using a new driver in the ROM image. It offers the following features:
+From v1.6 onwards, the serial port is supported using a new driver in the ROM image. As of v1.80, there is also support for a second SER port on hardware which supports it. Currently, only new QIMSI Gold boards with firmware v1.20 and higher support this USB serial port (see QIMSI manual for details)
 
-- Configurable port name; default SER1 but can be changed using the SER_USE command
+It offers the following features:
+
+- Configurable port name; default SER1 and SER2 but can be changed using the SER_USE command
 - Alternative port names for transmit- and receive-only channels (STXx/SRXx), for use with SERnet
 - Baud rate configurable from 1200 to 230400 bits per second (using normal BAUD command)
 - Flow control using XON/XOFF protocol with optional data transparency (between two Q68s or Q68-compatibles)
 - Configurable transmit- and receive buffers using SER_BUFF command
 
-The Q68's serial port is much faster than the original QL's SER ports, but unfortunately lacks CTS/RTS lines so all flow control has to be done in software using XON/XOFF handshake. The original QDOS/Minerva driver has only fixed-size buffers of 81 bytes, which is not adequate for handling high speeds. SMSQ/E, by contrast, has buffers of configurable size, and by default uses dynamic-size transmit buffers which can grow to insane size (probably designed to send files in quick succession to a printer). Unfortunately, all current versions of SMSQ/E do not support the XON/XOFF protocol even though the driver accepts 'X' as option on channel opens or as parameter to the SER_FLOW command, so sending or receiving files from or to the Q68 at full speeds will more or less lead to data corruption. 
+The serial port is much faster than the original QL's SER ports, but unfortunately lacks CTS/RTS lines so all flow control has to be done in software using XON/XOFF handshake. The original QDOS/Minerva driver has only fixed-size buffers of 81 bytes, which is not adequate for handling high speeds. SMSQ/E, by contrast, has buffers of configurable size, and by default uses dynamic-size transmit buffers which can grow to insane size (probably designed to send files in quick succession to a printer). Unfortunately, all current versions of SMSQ/E do not support the XON/XOFF protocol even though the driver accepts 'X' as option on channel opens or as parameter to the SER_FLOW command, so sending or receiving files from or to the Q68 at full speeds will more or less lead to data corruption. 
 
-Reliable transfers are possible using SERnet (https://dilwyn.theqlforum.com/tk/sernet.zip; please use v2.25 as v3 will not work with Minerva). When using default buffer size, it is not necessary to enable XON/XOFF flow control, so specifying SRX1I/STX1I as device name will be sufficient. Using SERnet, I was able to achieve througputs up to 8.5K bytes at 115200 bps, which is twice as fast as the original QLAN network.
+Reliable transfers are possible using SERnet (https://sinclairql.net/djw/tk/sernet.zip; please use v2.25 as v3 will not work with Minerva). When using default buffer size, it is not necessary to enable XON/XOFF flow control, so specifying SRX1I/STX1I as device name will be sufficient. Using SERnet, I was able to achieve througputs up to 8.5K bytes at 115200 bps, which is twice as fast as the original QLAN network.
 
-Commands available are:
+In the following list of available commands, a port number *port* (an integer in the range 1 to 2) may be optionally specified. If omitted, (physical!) serial port 1 is assumed.
 
-- SER_USE *name*, where *name* should be a four-character device name. It main use is to substitute an existing SER port such as ser2 or ser3, so existing software using these names will be able use the port. In addition, the STX and SRX transmit-only and receive-only devices will have their last character modified as well, so entering SER_USE SER2 will change these names to STX2 and SRX2 respectively.
-- SER_FLOW takes a one-letter parameter *I*, *H*, or *X*, where
+- SER_USE \[*port*\],*name*, where *name* should be a four-character device name. It main use is to substitute an existing SER port such as ser2 or ser3, so existing software using these names will be able use the port. In addition, the STX and SRX transmit-only and receive-only devices will have their last character modified as well, so entering SER_USE SER2 will change these names to STX2 and SRX2 respectively.
+
+  - Note that *port* refers to the *physical* port number on the machine, which is *not* affected by using this command to re-assign device names or numbers!
+  
+  - When re-assigning the SERx device names to a SER device with different port number, care should be taken to avoid a name clash. You should therefore enter the commands as follows:
+    - SER_USE 2,SER3: REMark rename SER2 to anything different
+    - SER_USE 1,SER2: REMark port 1 now uses SER2 
+    Alternatively, you can disable the SER2 device in the CONFIG section (see CONFIGURATION section above) if you don't use the second serial port.
+
+- SER_FLOW \[*port*\],*flow* takes a one-letter parameter *flow* with value *I*, *H*, or *X*, where
   - *I*: stands for no flow-control (i.e. send at full speed, ignore XON/XOFFs sent by the remote)
   - *X*: use XON/XOFF flow control when sending and receiving. This is not transparent to the data; if your data contains either of these characters (11H and 13H) this will disrupt transfers. Only use it when sending plain text data.
   - *H*: Use XON/XOFF flow control but escape these characters in the data stream (using DLE, so XON will be sent as 10H followed by 'Q' and XOFF as 10H followed by 'S'). Using this technique, full 8-bit data transfers will be possible whilst still providing flow control (equivalent to using the *H* option with DTR/CTS handshake on the original QL's SER ports). This is an implementation-specific extension to the protocol and will currently only work between two Q68s or compatibles using the SER driver.
   - Note that these options may also be specified when opening a channel to the port; e.g. OPEN#3,ser1x will open the serial port and use XON/XOFF flow control.
-- SER_BUFF *txbuffer*,*rxbuffer* sets the size of the transmit buffer and (optionally) the receive buffer. This allows you to configure the transmit and receive buffers, like SMSQ/E's SER_BUFF command. Its behaviour is somewhat different in that the default sizes are 16384 bytes for the receive buffer and 1024 bytes for the transmit buffer, and that dynamic-sized transmit buffers are not possible (they will usually fail when flow control has to be asserted, e.g. with Zmodem transfers).
-- SER_ROOM *threshold* sets the receive buffer's threshold for asserting flow control. When the receive buffer has been filled up to the point where there are less than *threshold* bytes free, a XOFF is sent to the remote. This threshold is also affected by SER_BUFF, which sets it to 1/4th of the receive buffer size. When the receive buffer has been emptied for 75 percent of its size, a XON character will be sent to the remote.
-- SER_CLEAR clears both input and output buffers.
+  
+- SER_BUFF \[*port*\],*txbuffer*,*rxbuffer* sets the size of the transmit buffer and (optionally) the receive buffer. This allows you to configure the transmit and receive buffers, like SMSQ/E's SER_BUFF command. Its behaviour is somewhat different in that the default sizes are 16384 bytes for the receive buffer and 1024 bytes for the transmit buffer, and that dynamic-sized transmit buffers are not possible (they will usually fail when flow control has to be asserted, e.g. with Zmodem transfers).
+
+  - A special case is when *txbuffer* and *rxbuffer* are both set to zero. In that case, *no* software buffering will take place between the physical port and the logical device, and it will rely purely on hardware buffering. This may be useful for QIMSI Gold's USB serial port (by default, this is named SER2) to optimise throughput, since this port already provides for hardware buffers. For this reason, port 2 has the default transmit and receive buffers set to 0 (i.e. no software buffers). It may be changed by entering the command SER_BUFF 2,*txbuffer*,*rxbuffer*. It is *not* recommended to set the buffers of port 1 to zero, since this uses a regular UART and using no buffers will usually lead to poor performance.
+  
+  - Note that changing the buffer sizes is only possible when no channels are open to the serial port, and any subsequent OPENs to the same port will use the new values. The default sizes may be configured (see CONFIGURATION section).
+
+  - Note also that setting SER_BUFF 0,0 on a port will disable any XON/XOFF flow control, since this relies on software buffers.
+
+- SER_ROOM \[*port*\],*threshold* sets the receive buffer's threshold for asserting flow control. When the receive buffer has been filled up to the point where there are less than *threshold* bytes free, a XOFF is sent to the remote. This threshold is also affected by SER_BUFF, which sets it to 1/4th of the receive buffer size. When the receive buffer has been emptied for 75 percent of its size, a XON character will be sent to the remote.
+
+- SER_CLEAR \[*port*\] clears both input and output buffers.
+
+- The BAUD command has been extended to allow for an optional port number, i.e. BAUD \[*port*\],*speed*. At the moment, there is no need to specify the baud rate for QIMSI Gold's second USB serial port, since this automatically uses the highest possible rate and ignores the rate set.
 
 Current issues:
 ---------------
@@ -150,8 +177,8 @@ Current issues:
 - The maximum amount of RAM supported is limited to 16MB, as the slave block system's structure currently prevents supporting more RAM. If you can do with less, I even recommend to cut RAM to a lower value using CALL 390,<RAMTOP value in bytes> to limit the size of the slave block table and speed up file access (see Minerva manual for more CALL 390 boot-time options). 
 - Note that you can still use RAM above 16MB for loading extension ROM images since Minerva scans areas above RAMTOP for the 'magic number' $4AFB0001 in 16K increments. E.g. you can load a ROM image of Toolkit II using LBYTES tk2_rom,16777216 and reboot Minerva using CTRL-ALT-SHIFT-TAB (or CALL 390,16777217), which links in the extension ROMs.
 - The SD-card driver requires a CARD_INIT 2 command to use the SD card in slot 2; other SD-card related commands are presently not implemented.
-- The QLNET and Ethernet interfaces are supported using external utilities, see https://dilwyn.theqlforum.com/q68/index.html for more information.
-- Some users of Q68 boards with newer firmware (v1.05) have reported problems with the keyboard and the Q68 'freezing' after the F1/F2 prompt. These are currently under investigation. Please use the Issues section to report any problems, stating as much information as possible (including the firmware version, which can be read from the Q68's initial boot screen; temporary removal of the SD card will give you enough time to read it).
+- The QLNET and Ethernet interfaces are supported using external utilities, see https://sinclairql.net/djw/q68/index.html for more information.
+- Please use the Issues section to report any problems, stating as much information as possible (including the firmware version, which can be read from the Q68's initial boot screen; temporary removal of the SD card will give you enough time to read it).
 
 Contributors:
 -------------
@@ -165,6 +192,14 @@ Contributors:
 
 Version history:
 ----------------
+- 06 January 2026: v1.80 released
+  - Added support for second USB serial port, currently only supported by QIMSI Gold versions with firmware v1.20 or higher. Syntax of SER_xxx commands amended to allow for an optional port number.
+  - MACHINE now returns correct machine number for non-Q68 devices (Q68=18, Qzero=19, QIMSI Gold=21).
+  - KBD_TABLE is now synonymous to KBTABLE for compatibility with SMSQ/E.
+  - CONFIG section added. See CONFIGURATION section above for details.
+  - Updated weblinks of QL resources to https://www.sinclairql.net/djw/
+- 11 August 2025:
+  - Released Minerva version 1.98j3 and 1G98j3. Fixed boot from mdv1_ and removed 68020+ boot code patch as the Super Gold Card already patches it.
 - 08 August 2025: v1.71 released
   - Fixed a bug in Minerva causing incorrect allocation of sx_\* extended system variables. Minerva version bumped to 1.98j2 and 1.98q2
   - Introduced German language standalone Minerva version 1G98j2, for use with German keyboards. Note that the Q68 version is English only, but the keyboard layout can be selected using the command KBTABLE n, where n=1 for US keyboards, 44 for UK keyboards and 49 for German keyboard layouts.

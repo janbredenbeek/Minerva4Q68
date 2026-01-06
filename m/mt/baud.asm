@@ -118,11 +118,16 @@ rts0
 
 * For the Q68, D1 may be specified as word (for speeds < 115200) or long.
 * For the long form, match on 115200 and 230400, else match on lsw only.
+* JB 20251201: Added support for second SER port on QIMSI Gold
+* This uses bits 0-1 as port number (0 or 1: SER1, 2: SER2)
 
 n_bauds equ     9               ; nine possible values
 
 mt_baud 
         moveq   #(n_bauds-1)*2,d0
+        moveq   #%11,d2
+        and.b   d1,d2           ; get port number (if any) in d2
+        andi.b  #%11111100,d1   ; clear these bits from d1
         lea     bauds+n_bauds*4,a1    ; past end of table
 baud_lp
         cmp.l   -(a1),d1        ; try to match baudrate
@@ -133,8 +138,13 @@ baud_lp
         bne.s   baud_lp         ; no
         andi.l  #$ffff,d1       ; clear bits 15-8
         bra     baud_lp
-set_baud                        ; set prescaler value
-        move.w  prescale(pc,d0.w),uart_prescale
+set_baud
+        lea     uart_prescale,a1 ; SER1 
+        subq.b  #1,d2           ; default or 1?
+        ble.s   do_sb           ; yes, use SER1
+        adda.w  #q68_ser2off,a1 ; point to SER2 prescale register
+do_sb
+        move.w  prescale(pc,d0.w),(a1) ; set prescaler value
         moveq   #0,d0
 baud_ex
         jmp     ss_rte

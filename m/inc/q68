@@ -25,10 +25,11 @@ KEY_STATUS 	equ	 $1C148
 ; ser comms keys
 uart_txdata	equ	$1c200
 uart_rxdata	equ	$1c204
-uart_status	equ	$1c208		; ser port status
+uart_status	equ	$1c208            ; ser port status
+q68_ser2off equ $20               ; offset for second USB SER port (QIMSI Gold)
 q68..txmpty	 equ	   0		  ; Read-only Transmit Buffer Empty
 q68..rxmpty	 equ	   1		  ; Read-only Receive Buffer Empty
-q68..rxfrerr	 equ	   2		  ; Read-only Receive Frame Error
+q68..rxfrerr equ	   2		  ; Read-only Receive Frame Error
 q68..rxovr	 equ	   3		  ; Read-only Receive Overrun Error
 q68..rxfull	 equ	   4		  ; Read-only Receive FIFO Full
 q68..txstat	 equ	   6		  ; bit set to enable transmit interrupt
@@ -95,6 +96,10 @@ q68_sramb	equ	$19000		; base of (fast) static ram: this con-
 					; tains a ptr to the next free space in
 					; the static ram
 q68_sramt	equ	$1c000		; top of (fast) static ram
+q68_mach	equ	$1c000		; also byte differencing the machines
+q68.mq68	 equ	  0		;   machine is q68
+q68.mqz 	 equ	  1		;   machine is qzero
+q68.mqsi	 equ	  2		;   machine is qimsi gold
 led		equ	$1c100		; st to turn led on, clr to turn it off
 q68_dcfg	equ	$0e		; where in cgf info drv-> card table is
 i2c_scl 	equ	$1c00c		; ?

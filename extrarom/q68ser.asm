@@ -1,7 +1,7 @@
 * **********************************
 * Q68 serial drivers for Minerva ROM
 * **********************************
-* Copyright (C) 2023 Jan Bredenbeek
+* Copyright (C) 2023-26 Jan Bredenbeek
 * 
 * This program is free software; you can redistribute it and/or
 * modify it under the terms of the GNU General Public License
@@ -23,8 +23,13 @@
 * 20231114 JB  v0.2     new access layer and configurable buffers
 * 20231129 JB  v0.3     changed default name back from SER4 to SER1
 * 20231228 JB  v1.0     first release version
+* 20251117 JB  v1.1     SER_BUFF 0,0 now allows for direct I/O
+* 20251123 JB  v1.10    Implemented second SER port (QIMSI Gold only)
+* 20251123 JB  v1.11    CONFIG block added
 
-version setstr  1.0
+        xdef    qcf_txb1,qcf_rxb1,qcf_txb2,qcf_rxb2,qcf_ser2,qcf_smem
+
+version setstr  1.11
 
         include 'm_inc_assert'
         include 'm_mincf'
@@ -48,13 +53,14 @@ sp_io    ds.l   1               ; JSR instruction to io.serio (short jump)
          ds.l   1               ; address of fetch byte routine
          ds.l   1               ; address of send byte routine
          ds.w   1               ; RTS instruction
-sp_name  ds.l   1               ; name of SER device (default 'SER4')
-sp_srx   ds.l   1               ; name of SRX device (default 'SRX4')
-sp_stx   ds.l   1               ; name of STX device (default 'STX4')
+sp_name  ds.l   1               ; name of SER device (default 'SER1')
+sp_srx   ds.l   1               ; name of SRX device (default 'SRX1')
+sp_stx   ds.l   1               ; name of STX device (default 'STX1')
 sp_rxq   ds.l   1               ; pointer to receive queue
 sp_txq   ds.l   1               ; pointer to transmit queue
 sp_rxch  ds.l   1               ; pointer to channel for receive
 sp_txch  ds.l   1               ; pointer to channel for transmit
+sp_iobas ds.l   1               ; pointer to I/O base address
 sp_rxsiz ds.w   1               ; receive queue size
 sp_txsiz ds.w   1               ; transmit queue size
 xof_thrs ds.w   1               ; (W) free buffer threshold for sending XOFF
@@ -65,6 +71,10 @@ sp_flow  ds.b   1               ; (B)  0: no flow control
 txhold   ds.b   1               ; (B) remote requested to hold
 rxhold   ds.b   1               ; (B) we requested remote to hold
 rx_dle   ds.b   1               ; received DLE flag (transparent mode)
+rxint_en ds.b   1               ; rx interrupt enabled
+txint_en ds.b   1               ; tx interrupt enabled
+pend_flg ds.b   1               ; pending byte flag (direct I/O)
+pend_byt ds.b   1               ; pending byte (direct I/O)
          ds.w   0
 sp_len   equ    *               ; length of physical definition block
 
@@ -95,6 +105,16 @@ string$ macro   a
         ds.w    0
         endm
 
+        section config
+
+qcf_txb1 dc.w    1024           ; default tx queue size (SER1)
+qcf_rxb1 dc.w    16384          ; default rx queue size (SER1)
+qcf_txb2 dc.w    0              ; default tx queue size (SER2)
+qcf_rxb2 dc.w    0              ; default rx queue size (SER2)
+qcf_ser2 dc.b    1              ; enable SER2 if supported by hardware
+qcf_smem dc.b    1              ; use fast memory to store part of driver
+         ds.w    0
+
 ; Initialise the serial port
 ; ==========================
 ;
@@ -103,45 +123,95 @@ string$ macro   a
 
         xdef     ser_init
 
-initreg reg     d1-d3/a0-a3
+initreg reg     d1-d4/a0-a5
 
-ser_init
+ser_init:
+        bra.s   ser_ini2
+        
+signon  string$ {'SER driver for Q68 v[version]  JB 2026',10}
+
+ser_ini2
         movem.l initreg,-(sp)
+        moveq   #0,d6                   ; port number
+        lea     uart_status,a4          ; I/O base address
+        move.b  qcf_smem(pc),d0         ; use fast memory?
+        beq.s   fm_om                   ; no
+        move.l  q68_sramb,a5            ; SRAM free space pointer
+        move.w  #fm_end-fm_start,d0     ; size of block to copy
+        adda.w  d0,a5                   ; find end of block
+        cmpa.l  #q68_sramt,a5
+        bcc.s   fm_om                   ; oops... out of SRAM
+        move.l  a5,q68_sramb            ; set new free space
+        lea     fm_end,a0               ; end of source block
+ser_cpy
+        move.w  -(a0),-(a5)             ; copy code to SRAM
+        subq.w  #2,d0
+        bgt     ser_cpy                 ; this will leave A5 at the start
+        bra.s   ser2_ini
+
+* calculate and store the absolute addresses required for io_serio
+
+getaddr move.w  (a0)+,a1                ; get relative pointer
+        lea     -2(a0,a1.w),a1          ; make address absolute
+        move.l  a1,(a2)+                ; and store it
+        rts
+fm_om   
+        lea     fm_start,a5             ; SRAM is full, point to normal RAM
+ser2_ini
         moveq   #sp_len,d1
         moveq   #0,d2
         moveq   #mt.alchp,d0
-        trap    #1
+        trap    #1                      ; allocate physical def block
         tst.l   d0
         bne     init_end
-        lea     ser_xint,a1
-        move.l  a1,sv_axint(a0)
-        lea     ser_schd,a1
-        move.l  a1,sv_aschd(a0)
-        lea     dev_def,a3              ; set up pointers
-        lea     sv_aopen(a0),a2
-        bsr.s   getaddr                 ; open routine
-        bsr.s   getaddr                 ; close routine
-        move.l  a2,sv_aio(a0)           ; physical i/o routine
+        move.l  a0,a3                   ; base of linkage block
+        lea     sv_axint(a3),a2         ; external interrupt link
+        move.l  a5,a0                   ; rel pointer to routines
+        bsr     getaddr                 ; external interrupt routine
+        lea     sv_aschd(a3),a2
+        bsr     getaddr                 ; scheduler loop routine
+        lea     dev_def,a0              ; open and close
+        lea     sv_aopen(a3),a2
+        bsr     getaddr                 ; open routine
+        bsr     getaddr                 ; close routine
+        move.l  a2,sv_aio(a3)           ; physical i/o routine
         move.w  #$4eb8,(a2)+            ; jsr absolute short
         move.w  io.serio,(a2)+          ; to io_serio
-        bsr.s   getaddr                 ; pending i/o routine
-        bsr.s   getaddr                 ; fetch character
-        bsr.s   getaddr                 ; send character
+        lea     4(a5),a0                ; pending / fetch byte / send byte
+        bsr     getaddr                 ; pending i/o routine
+        bsr     getaddr                 ; fetch character
+        bsr     getaddr                 ; send character
         move.w  #$4e75,(a2)+            ; rts
         move.l  #'SER1',(a2)+           ; set device name
-        move.l  #'SRX1',(a2)+
-        move.l  #'STX1',(a2)+
-        move.l  #def_rxsz<<16+def_txsz,sp_rxsiz(a0)
-        move.l  #def_rxhw<<16+def_rxlw,xof_thrs(a0)
-        assert  0,sv_lxint
+        add.b   d6,-1(a2)               ; SER2 on second pass
+        move.l  #'SRX1',(a2)+           ; RX only device
+        add.b   d6,-1(a2)
+        move.l  #'STX1',(a2)+           ; TX only device
+        add.b   d6,-1(a2)
+        move.l  a4,sp_iobas(a3)         ; I/O base address
+;        assert  qcf_rxb1,qcf_txb1-2,qcf_rxb2-4,qcf_rxb2-6
+        lea     qcf_txb1(pc),a1         ; rx buffer << 16 + tx buffer
+        tst.b   d6                      ; first pass?
+        beq.s   set_int                 ; yes, skip
+        addq.l  #4,a1                   ; else use second set
+set_int
+        movem.w (a1),d4-d5              ; rx buffer sz in d4, tx buffer sz in d5
+        bsr     sb_set                  ; set buffer sizes + XON/XOFF threshold
+        lea     sv_lxint(a3),a0
         moveq   #mt.lxint,d0
-        trap    #1
-        lea     sv_lschd(a0),a0
+        trap    #1                      ; link in external interrupt handler
+        lea     sv_lschd(a3),a0
         moveq   #mt.lschd,d0
-        trap    #1
+        trap    #1                      ; link in scheduler task
         addq.l  #sv_lio-sv_lschd,a0
         moveq   #mt.liod,d0
-        trap    #1
+        trap    #1                      ; and finally link in driver
+        adda.w  #q68_ser2off,a4         ; point to SER2 I/O base
+        move.b  qcf_ser2(pc),d0         ; SER2 enabled in config?
+        beq.s   no_ser2
+        bset    #0,d6                   ; 0 goes to 1 on first pass
+        beq     ser2_ini                ; loop for second port
+no_ser2
         moveq   #mt.inf,d0
         trap    #1
         move.l  sv_chtop(a0),a0
@@ -159,20 +229,9 @@ init_end
         movem.l (sp)+,initreg
         rts
 
-* calculate and store the absolute addresses required for io_serio
-
-getaddr move.w  (a3)+,a1        ; get relative pointer
-        lea     -2(a3,a1.w),a1  ; make address absolute
-        move.l  a1,(a2)+        ; and store it
-        rts
                     
 dev_def dc.w    open-*          ; open routine
         dc.w    close-*         ; close routine
-        dc.w    pend-*          ; pending input
-        dc.w    fbyte-*         ; fetch character
-        dc.w    sbyte-*         ; send char
-
-signon  string$ {'SER driver for Q68 v[version]  JB 2023',10}
 
 procs   dc.w    6               ; 5 procs but allow for long names
         dc.w    ser_use-*
@@ -188,34 +247,68 @@ procs   dc.w    6               ; 5 procs but allow for long names
         dc.w    0,0,0
 
 * subroutine to get address of linkage block from BASIC
-* Entry: none
+* Entry: D6 port number (0 or 1)
 * Exit: D0 error code (0 OK, err.nf block not found)
 *       A3 points to linkage block
 
 get_lb:
-        movem.l d1-d2/a0-a1,-(sp)  ; save these registers
+        movem.l d1-d2/d6/a0-a2,-(sp)  ; save these registers
+        subq.w  #1,d6           ; check port number (must be 0 or 1)
+        blt.s   glb_notf
+        cmpi.w  #1,d6
+        bgt.s   glb_notf
         moveq   #mt.inf,d0
         trap    #1
-        lea     sv_i2lst(a0),a3 ; pointer to external interrupt task list
-        lea     ser_xint,a1     ; address of our external interrupt routine
-glb_loop:
+        lea     sv_drlst(a0),a3 ; pointer to driver list
+        lea     open,a1         ; open routine
+        lea     uart_status,a2  ; sp_iobas for port 1
+        mulu    #q68_ser2off,d6
+        adda.w  d6,a2           ; point to base register of port (uart_status)
+glb_loop
         tst.l   (a3)            ; end of list reached?
         beq.s   glb_notf        ; yes
         move.l  (a3),a3         ; else, get next entry
-        cmpa.l  4(a3),a1        ; is this the entry we're looking for?
+        cmpa.l  sv_aopen-sv_lio(a3),a1        ; is this the entry we're looking for?
         bne.s   glb_loop        ; no, loop back
+        cmpa.l  sp_iobas-sv_lio(a3),a2 ; right port?
+        bne.s   glb_loop        ; no, next one
+        lea     -sv_lio(a3),a3  ; adjust for link offset
         moveq   #0,d0           ; success
         bra.s   glb_ret
-glb_notf:
-        moveq   #err.nf,d0      ; oops... block not found!
-glb_ret movem.l (sp)+,d1-d2/a0-a1
+glb_notf
+        moveq   #err.bp,d0      ; oops... block not found!
+glb_ret movem.l (sp)+,d1-d2/d6/a0-a2
         rts
+
+* Get port number (must be integer with value 1 or 2)
+* First parameter must be int or float, string will be ignored
+* Returns: D6.W port number (or first parameter)
+
+get_port:
+        moveq   #1,d6           ; set default port 1
+        moveq   #0,d0
+        cmpa.l  a3,a5           ; any parameters?
+        beq.s   gp_rts          ; no, return default
+        moveq   #$0f,d0
+        and.b   1(a6,a3.l),d0   ; check parameter type
+        subq.b  #1,d0
+        beq.s   gp_rts          ; must be int or float
+        move.l  a5,-(sp)
+        lea     8(a3),a5        ; only 1 parameter
+        move.w  ca.gtint,a2     ; get integer value
+        jsr     (a2)
+        move.l  (sp)+,a5
+        bne.s   gp_rts          ; report any error
+        move.w  (a6,a1.l),d6    ; get port number
+gp_rts
+        tst.l   d0
+        rts                     
 
 * Get a string from S*BASIC (real string or SB name)
 * Entry: A3, A5 pointer to parameters
 * Exit: A1 ptr to string on RI stack, D0 error code
 
-get_name        
+get_name:
         cmpa.l  a3,a5           ; parameter must be given
         bne.s   gtfnam_1
 err_bp
@@ -272,12 +365,14 @@ err_bn
 
 * Set name of SER device (also STX/SRX, but only last character)
 
-ser_use
+ser_use:
+        bsr     get_port        ; get port number in D6
+        bne.s   use_r
         bsr     get_name
         bne.s   use_r
-        cmpi.w  #4,(a6,a1.l)
+        cmpi.w  #4,(a6,a1.l)    ; name must be 4 characters
         bne     err_bp
-        bsr     get_lb
+        bsr     get_lb          ; get linkage block
         bne.s   use_r
         move.l  #$dfdfdfff,d1
         and.l   2(a6,a1.l),d1
@@ -288,12 +383,14 @@ use_r   rts
 
 * Set default flow control type: I none, X XON/XOFF, H XON/XOFF with escape
 
-ser_flow
-        bsr     get_name
+ser_flow:
+        bsr     get_port        ; get port number
         bne.s   flow_r
-        cmpi.w  #1,(a6,a1.l)
+        bsr     get_name        ; get parameter
+        bne.s   flow_r
+        cmpi.w  #1,(a6,a1.l)    ; must be 1 character
         bne     err_bp
-        bsr     get_lb
+        bsr     get_lb          ; get linkage block
         bne.s   flow_r
         moveq   #$df-256,d1
         and.b   2(a6,a1.l),d1
@@ -303,50 +400,69 @@ ser_flow
         beq.s   flow_i
         subi.b  #'X'-'I',d1
         bne     err_bp
-        st      sp_flow(a3)
+        st      sp_flow(a3)     ; XON/XOFF flow control
         rts
 flow_h  
-        move.b  #1,sp_flow(a3)
-        rts
+        move.b  #1,sp_flow(a3)  ; 'hardware' flow control
+        rts                     ; (actually XON/XOFF with escape)
 flow_i  
-        clr.b   sp_flow(a3)
+        clr.b   sp_flow(a3)     ; no flow control
 flow_r
         rts
 
-ser_buff
+* SER_BUFF command
+* Usage: SER_BUFF [port_number],tx_size,[rx_size]
+* port_number should be 1 or 2
+
+ser_buff:
         moveq   #-1,d4          ; pre-set default rx queue size
+        move.w  #def_txsz,d5    ; default tx queue size
+        moveq   #1,d6           ; default port 1
         cmpa.l  a3,a5
         beq.s   sb_default
-        move.w  ca.gtint,a2
+        move.w  ca.gtint,a2     ; get integers
         jsr     (a2)
         bne.s   sb_rts
         moveq   #err.bp,d0      ; prepare for sanity check
-        subq.w  #2,d3
-        bgt.s   sb_rts
+        subq.w  #1,d3
+        blt.s   sb_rts          ; at least 1 parameter should be given
+        tst.w   (a6,a1.l)       ; test first parameter
+        ble.s   sb_2prm
+        cmpi.w  #2,(a6,a1.l)    ; valid port number?
+        bgt.s   sb_2prm
+        move.w  (a6,a1.l),d6    ; get port number
+        addq.l  #2,a1           ; skipover port number
+        subq.w  #1,d3           ; discount from parameter count
+        blt.s   sb_default      ; if no more parms, use default values
+sb_2prm
         moveq   #$10,d7         ; constant
         move.w  (a6,a1.l),d5    ; new tx queue size
+        beq.s   sb_notxq        ; zero means direct tx
         cmp.w   d7,d5
         blt.s   sb_rts          ; must be 16 or more
         add.w   d7,d5           ; allow for queue header
         bvs.s   sb_rts          ; total must be < 32768
+sb_notxq
         tst.w   d3              ; rx queue size specified?
-        blt.s   sb_default
+        blt.s   sb_default      ; no, use default
         move.w  2(a6,a1.l),d4   ; yes, get new rx queue size
+        beq.s   sb_default      ; zero for direct rx
         cmp.w   d7,d4
         blt.s   sb_rts          ; must be 16 or more
         add.w   d7,d4
         bvs.s   sb_rts          ; total must be < 32768
 sb_default
-        bsr     get_lb
-        bne.s   sb_rts
-        trap    #0
+        bsr     get_lb          ; get linkage block
+        bne.s   sb_rts          ; oops...
+sb_set
+        trap    #0              ; go into supervisor mode
         moveq   #err.iu,d0
         move.l  sp_rxch(a3),d1
         or.l    sp_txch(a3),d1
         bne.s   sb_iu           ; no channels may be open!
         move.w  d5,sp_txsiz(a3) ; set tx queue size
         tst.w   d4              ; rx queue size specified?
-        ble.s   sb_ok           ; no, end.
+        blt.s   sb_ok           ; no, end.
         move.w  d4,sp_rxsiz(a3) ; set it
         move.w  d4,d1
         lsr.w   #2,d1
@@ -362,12 +478,19 @@ sb_rts
 
 * Set amount of free room in rx queue to send XOFF below
 
-ser_room
+ser_room:
+        moveq   #1,d6           ; default port 1
         move.w  ca.gtint,a2
         jsr     (a2)
         bne.s   sr_rts
         subq.w  #1,d3
-        bne     err_bp
+        blt     err_bp
+        beq.s   sr_room         ; no port, use default
+        subq.w  #1,d3
+        bne     err_bp          ; do not allow more than 2 params
+        move.w  (a6,a1.l),d6    ; port number
+        addq.l  #2,a1           ; skipover port
+sr_room
         move.w  (a6,a1.l),d1
         bsr     get_lb
         bne.s   sr_rts
@@ -382,7 +505,9 @@ sr_rts
 
 * Clear input and output queues
         
-ser_clear
+ser_clear:
+        bsr     get_port
+        bne.s   sc_rts
         bsr     get_lb
         bne.s   sc_rts
         assert  sp_rxq,sp_txq-4
@@ -400,7 +525,7 @@ sc_rts
 
 * Open routine
 
-open        
+open:
         cmpi.w  #4,(a0)
         blt.s   notf
         cmpi.w  #6,(a0)         ; check name length, must be 4 to 6
@@ -440,7 +565,7 @@ ser_ok
         cmpi.b  #'X',d0
         bne.s   alloc_ch
 set_hs
-        move.b  d6,sp_flow(a3)  ; set flow control (global!)
+        move.b  d6,sp_flow(a3)  ; set flow control
 
 * sorry - we do not reuse old channel blocks
 
@@ -451,7 +576,7 @@ alloc_ch
         tst.l   sp_rxch(a3)     ; is there already a rx channel?
         bne     err_iu          ; oops... 
         add.w   sp_rxsiz(a3),d1 ; add rx queue size
-        tst.b   d7              ; opening rx only
+        tst.b   d7              ; opening rx only?
         bgt.s   rx_only         ; yes, skip
 tx_only 
         tst.l   sp_txch(a3)     ; is there already a tx channel?
@@ -468,19 +593,25 @@ rx_only
         move.b  d7,ser_dir(a0)  ; set direction
         beq.s   alloc_tx        ; skip if tx-only
         move.l  a0,sp_rxch(a3)  ; set ptr to rx chan
-        move.w  sp_rxsiz(a3),d1
-        bsr.s   alloc_q
+        sf      pend_flg(a3)    ; no pending input
+        move.w  sp_rxsiz(a3),d1 ; rx queue size or 0
+        beq.s   alloc_tx        ; skip if direct I/O
+        bsr.s   alloc_q         ; allocate queue
         move.l  a2,sp_rxq(a3)   ; set rx queue address
         adda.w  d1,a2           ; tx queue (if any) comes after rx queue
         sf      rx_dle(a3)      ; clear flag
-        bset    #q68..rxstat,uart_status ; enable rx interrupt
+        st      rxint_en(a3)    ; signal 'use rx interrupt'
+        move.l  sp_iobas(a3),a4
+        bset    #q68..rxstat,(a4) ; enable rx interrupt
 alloc_tx
         tst.b   d7              ; open for rx only?
         bgt.s   open_ok         ; yes, skip this
         move.l  a0,sp_txch(a3)  ; set ptr to tx chan
-        move.w  sp_txsiz(a3),d1
-        bsr.s   alloc_q         ; no, allocate
+        move.w  sp_txsiz(a3),d1 ; tx queue length
+        beq.s   open_ok         ; no queue, direct tx I/O
+        bsr.s   alloc_q         ; else, allocate queue
         move.l  a2,sp_txq(a3)   ; set tx queue address
+        st      txint_en(a3)    ; signal 'use tx interrupt'
 open_ok
         moveq   #0,d0
 err_rts
@@ -494,31 +625,46 @@ alloc_q
         movem.l (sp)+,d1/a3
         rts
         
-close
+close:
         tst.b   ser_dir(a0)     ; opened tx only?
         beq.s   cl_tx           ; yes
-        bclr    #q68..rxstat,uart_status ; clear rx interrupt
-        clr.l   sp_rxch(a3)     ; clear input channel
+        move.l  sp_iobas(a3),a4
+        bclr    #q68..rxstat,(a4) ; clear rx interrupt
+        sf      rxint_en(a3)    ; disable interrupt handler
+        clr.l   sp_rxch(a3)     ; clear input channel pointer
         clr.l   sp_rxq(a3)      ; clear rx queue pointer
         tst.b   ser_dir(a0)     ; rx only?
-        ble.s   cl_tx           ; no, set tx queue EOF
-        move.w  mm.rechp,a2
-        jmp     (a2)            ; exit and clean up channel block
+        bgt.s   cl_rel          ; yes, release immediately
 cl_tx
-        move.l  sp_txq(a3),a2
+        move.l  sp_txq(a3),d0   ; is there a tx queue?
+        beq.s   cl_rel          ; no, cleanup immediately
+        move.l  d0,a2
         move.w  io.qeof,a1      ; set tx queue to EOF
         jsr     (a1)            ; (scheduler task will clean it up later)
         moveq   #0,d0
         rts
+cl_rel
+        clr.l   sp_txch(a3)     ; clear input channel pointer
+        move.w  mm.rechp,a2
+        jmp     (a2)            ; exit and clean up channel block
+
+fm_start:                       ; *** START OF FAST MEMORY BLOCK ***
+        dc.w    ser_xint-*      ; external interrupt
+        dc.w    ser_schd-*      ; scheduler loop
+        dc.w    pend-*          ; pending input
+        dc.w    fbyte-*         ; fetch character
+        dc.w    sbyte-*         ; send char
 
 ; check for pending input
 
-pend
+pend:
         tst.b   ser_dir(a0)     ; transmit only?
         beq.s   err_ef          ; yes, return EOF
         move.l  sp_rxq(a3),a2
+        move.l  a2,d0           ; is there a queue?
+        beq.s   pend_dir        ; no, do direct I/O
         move.l  a3,-(sp)
-        move.w  io.qtest,a3
+        move.w  io.qtest,a3     ; test queue for pending input
         jsr     (a3)
         move.l  (sp)+,a3
         rts
@@ -526,17 +672,50 @@ err_ef
         moveq   #err.ef,d0
         rts
 
+; check for pending input when doing direct I/O
+; we have to buffer one byte though and return it in D1
+
+pend_dir
+        tst.b   pend_flg(a3)    ; is there input pending?
+        bne.s   pending         ; yes
+        move.l  sp_iobas(a3),a4
+        moveq   #err.nc,d0      ; assume no pending input
+        btst    #q68..rxmpty,(a4) ; is RX fifo empty?
+        bne.s   pendrts         ; yes, return NC
+        st      pend_flg(a3)    ; signal 'pending byte in buffer'
+        move.b  uart_rxdata-uart_status(a4),d1 ; fetch byte
+        move.b  d1,pend_byt(a3) ; and store it for later
+        moveq   #0,d0           ; return OK
+pendrts rts
+
+pending move.b  pend_byt(a3),d1 ; get pending byte
+        moveq   #0,d0           ; return OK
+        rts
+
+; fetch byte directly from hardware
+; this simply calls pend_dir as this returns any byte got in D1
+; then clear pending flag
+
+fb_dir  bsr     pend_dir        ; test for pending input
+        bne.s   fetchrts        ; nothing to fetch
+        sf      pend_flg(a3)    ; clear pending input buffer
+fetchrts
+        tst.l   d0
+        rts                     ; return (D0 and D1 have been set already)
+
 ; fetch a byte
 
-fbyte
+fbyte:
         tst.b   ser_dir(a0)     ; transmit only?
         beq.s   err_ef          ; yes, return EOF
-        move.l  sp_rxq(a3),a2
+        move.l  sp_rxq(a3),d0   ; is there a rx queue?
+        beq     fb_dir          ; no, do direct I/O
+        move.l  d0,a2
         move.l  a3,-(sp)
-        move.w  io.qout,a3
+        move.w  io.qout,a3      ; get byte from rx queue
         jsr     (a3)
         move.l  (sp)+,a3
-        bne.s   fbyt_rts
+        bne.s   fbyt_rts        ; return if nothing got
         tst.b   sp_flow(a3)     ; any flow control?
         ble.s   fbyt_rts        ; no, unless transparent
         cmpi.b  #DLE,d1         ; received DLE?
@@ -556,9 +735,13 @@ got_dle
 
 ; send a byte
 
-sbyte   tst.b   ser_dir(a0)     ; is channel opened for transmit?
+sbyte:
+        tst.b   ser_dir(a0)     ; is channel opened for transmit?
         bgt.s   err_ro          ; no, return 'read only'
-        move.l  sp_txq(a3),a2   ; get tx queue
+        move.l  sp_iobas(a3),a4 ; base of UART registers
+        move.l  sp_txq(a3),d0   ; get tx queue
+        beq.s   sb_diro         ; no queue, direct output
+        move.l  d0,a2           ; set queue address
         move.l  a3,-(sp)        ; save A3 (smashed by queue routines!)
         tst.b   sp_flow(a3)     ; flow control 'transparent'?
         ble.s   sb_put          ; no, go ahead
@@ -585,25 +768,34 @@ sb_put
         jsr     (a3)            ; send byte to queue
         move.l  (sp)+,a3        ; restore A3
 sb_txen
-        bset    #q68..txstat,uart_status ; enable tx interrupt
+        bset    #q68..txstat,(a4) ; enable tx interrupt
         rts                     ; exit with status from io.qin
 err_ro  
         moveq   #err.ro,d0      ; 'read only'
         rts
+sb_diro                         ; direct output
+        btst    #q68..txmpty,(a4) ; is transmit FIFO ready?
+        beq.s   sb_nc           ; no, return 'not complete'
+        move.b  d1,uart_txdata-uart_status(a4) ; send byte
+        rts                     ; return (D0 = 0).
 sb_full                         ; no room for 2 bytes, return NC
         move.l  (sp)+,a3        ; restore A3
+        bset    #q68..txstat,(a4) ; enable tx interrupt
+sb_nc
         moveq   #err.nc,d0      ; return 'not complete'
-        bra     sb_txen
+        rts
 
 * External interrupt routine
 
-ser_xint
+ser_xint:
         move.l  a3,-(sp)                ; save A3 (the queue routines smash it!)
-        lea     uart_status,a4
+        move.l  sp_iobas(a3),a4
+        tst.b   rxint_en(a3)            ; rx interrupt enabled?
+        beq     txser                   ; no; don't get anything (even XON/XOFF)
         moveq   #q68.rxand,d2
         and.b   (a4),d2                 ; receive buffer empty?
         bne.s   rx_chk_q                ; yes, nothing to fetch
-	move.b	uart_rxdata-uart_status(a4),d1 ; always get data
+        move.b  uart_rxdata-uart_status(a4),d1 ; always get data
 rx_chk_q
         move.l  sp_rxq(a3),a2           ; get address of rx queue (or 0)
         tst.b   sp_flow(a3)             ; flow control enabled?
@@ -617,7 +809,7 @@ rx_chk_q
 ser_x_l1
         move.w  io.qin,a3
         jsr     (a3)                    ; store in queue
-        btst	#q68..rxmpty,(a4)       ; rx fifo has still bytes waiting?
+        btst    #q68..rxmpty,(a4)       ; rx fifo has still bytes waiting?
         bne.s   txser                   ; no
         move.b  uart_rxdata-uart_status(a4),d1 ; get next byte
         bra     ser_x_l1
@@ -627,7 +819,7 @@ ser_x_l2
         moveq   #q68.rxand,d2
         and.b   (a4),d2                 ; receive buffer empty?
         bne.s   txser                   ; yes, get out
-	move.b	uart_rxdata-uart_status(a4),d1 ; get next byte
+        move.b  uart_rxdata-uart_status(a4),d1 ; get next byte
 ; loop enters here
 chk_flow
         tst.b   d2                      ; got any data?
@@ -677,9 +869,11 @@ send_x
 
 txser_s                                 ; entry point from scheduler task
         move.l  a3,-(sp)                ; save A3 first
+        move.l  sp_iobas(a3),a4
 txser
-        lea     uart_status,a4
         move.l  (sp),a3
+        tst.b   txint_en(a3)            ; tx interrupt enabled?
+        beq.s   tx_end                  ; no, exit
         tst.b   txhold(a3)              ; are we allowed to send?
         bne.s   nomore                  ; no
         move.l  sp_txq(a3),d0           ; get queue
@@ -709,7 +903,7 @@ tx_flow
 
 * Scheduler loop routine
 
-ser_schd
+ser_schd:
         tst.l   sp_txq(a3)              ; do we have a queue?
         beq.s   schd_rts                ; no, finished
         moveq   #0,d0                   ; preset 'no error'
@@ -726,6 +920,7 @@ schd_clr
         move.l  sp_txch(a3),a0          ; clean up channel block and pointers
         clr.l   sp_txch(a3)
         clr.l   sp_txq(a3)
+        sf      txint_en(a3)            ; disable tx interrupt handler
         sf      rxhold(a3)
         sf      txhold(a3)        
         move.w  mm.rechp,a2
@@ -734,5 +929,7 @@ schd_end
         move.w  (sp)+,sr
 schd_rts
         rts
+        
+fm_end: equ     *
                 
         end

@@ -2,6 +2,16 @@ filetype 0
 
 program extrarom_bin
 
+section header
+section config
+section q68_q68hw
+section fastmem
+section q68screen
+section q68_ser
+section history
+; section extrap
+section extrarom_end
+
 input extrarom_q68hw_rel
 input extrarom_fastmem_rel
 input extrarom_q68scr_rel
@@ -9,4 +19,5 @@ input extrarom_q68scr_rel
 ;input extrarom_area16_rel
 input extrarom_q68ser_rel
 input hist_init_rel
+; input dos1_multimon_v3_extrap_rel
 input extrarom_romend_rel

@@ -67,7 +67,7 @@ bp_mode
         moveq   #8,d1           256,8,264 - byte is 08h
 set_it
         moveq   #mt.dmode,d0    set mode
-        bra.s   trap1
+        bra     trap1
 
 * NET number sets the network station number (1..127)
 bp_net
@@ -152,9 +152,16 @@ rndgrot
 bp_baud
 ;        jsr     ca_gtin1(pc)    get the baud rate to d1
 ***     now allow for baud rates > 32767 (Q68!)
-        jsr     ca_gtli1
+        jsr     ca_gtlin        ; one or 2 parameters
         bne.s   rts0
-        moveq   #mt.baud,d0
+        moveq   #0,d1           ; prepare for one parameter
+        subq.w  #1,d3
+        blt     err_bp          ; at least 1 parameter should be given
+        beq.s   baud_set        ; just do it with one
+        move.l  4(a6,a1.l),d1   ; two params, use second as base
+baud_set
+        add.l   (a6,a1.l),d1    ; either baud rate or optional port #
+        moveq   #mt.baud,d0     ; mt.baud will sort this out
 trap1
         trap    #1              go try to set it
         rts
